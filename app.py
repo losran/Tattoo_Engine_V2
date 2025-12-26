@@ -12,7 +12,7 @@ st.set_page_config(layout="wide", page_title="Tattoo Engine V2")
 apply_pro_style()
 render_sidebar()
 
-# 初始化数据
+# 初始化
 if "db_all" not in st.session_state:
     init_data()
 
@@ -27,36 +27,33 @@ if "DEEPSEEK_KEY" in st.secrets:
     except:
         pass
 
-# Session 初始化
 if "ai_results" not in st.session_state: st.session_state.ai_results = []
 if "input_text" not in st.session_state: st.session_state.input_text = ""
 
 # ===========================
-# 2. 界面布局 (调整比例)
+# 2. 界面布局 (1 : 1.5)
 # ===========================
-st.title("Tattoo Engine V2")
-st.caption("Smart Ingest & Asset Management")
-st.divider()
-
-# 🔴 关键修改：左 1 : 右 1.2 (右边更宽敞)
-col_ingest, col_warehouse = st.columns([1, 1.2])
+col_ingest, col_warehouse = st.columns([1, 1.5])
 
 # ===========================
-# 3. 左侧：智能入库 (更紧凑)
+# 3. 左侧：智能入库 (纯净版)
 # ===========================
 with col_ingest:
-    st.subheader("Smart Ingest")
+    st.subheader("Tattoo Engine V2")
+    st.caption("Smart Ingest")
     
-    # 🔴 关键修改：高度减小到 120 (更精致)
+    st.write("") 
+    
+    # 输入框
     st.session_state.input_text = st.text_area(
         "Raw Input",
         st.session_state.input_text,
-        height=120, 
-        placeholder="Input keywords..."
+        height=100, 
+        placeholder="Input keywords here..."
     )
 
-    # 按钮
-    if st.button("Analyze", type="primary", use_container_width=True):
+    # 按钮 (无符号)
+    if st.button("Analyze & Extract", type="primary", use_container_width=True):
         if not st.session_state.input_text:
             st.warning("Input is empty")
         elif not client:
@@ -64,10 +61,9 @@ with col_ingest:
         else:
             with st.spinner("Processing..."):
                 prompt = f"""
-                Task: Extract keywords from tattoo description into JSON.
+                Task: Extract keywords to JSON.
                 Categories: {", ".join(WAREHOUSE.keys())}
-                Rules: Return JSON ONLY. No markdown.
-                Format: {{"Subject": ["item1"], "StyleSystem": ["style1"]}}
+                Format: {{"Subject": ["item"], "StyleSystem": ["style"]}}
                 Input: {st.session_state.input_text}
                 """
                 try:
@@ -92,14 +88,15 @@ with col_ingest:
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-    # 结果预览
+    # 预览与入库 (无符号)
     if st.session_state.ai_results:
         st.write("")
-        st.caption("Preview")
-        df_preview = pd.DataFrame(st.session_state.ai_results)
-        st.dataframe(df_preview, use_container_width=True, hide_index=True)
+        st.markdown("##### Preview Results")
         
-        if st.button("Confirm Import", type="secondary", use_container_width=True):
+        df_preview = pd.DataFrame(st.session_state.ai_results)
+        st.dataframe(df_preview, use_container_width=True, hide_index=True, height=200)
+        
+        if st.button("Import to Warehouse", type="secondary", use_container_width=True):
             changed_cats = set()
             for item in st.session_state.ai_results:
                 cat, val = item["Category"], item["Keyword"]
@@ -117,39 +114,47 @@ with col_ingest:
                 st.rerun()
 
 # ===========================
-# 4. 右侧：仓库管理 (更宽敞)
+# 4. 右侧：仓库 (标签云 + 瀑布流)
 # ===========================
 with col_warehouse:
-    st.subheader("Warehouse")
-    
-    # 1. 选择分类
-    target_cat = st.selectbox("Category", list(WAREHOUSE.keys()))
-    current_words = st.session_state.db_all.get(target_cat, [])
-    
-    # 2. 展示数据 (容器高度增加，显示更多行)
-    with st.container(border=True):
-        st.caption(f"Total: {len(current_words)}")
-        if current_words:
-            df_words = pd.DataFrame(current_words, columns=["Keywords"])
-            st.dataframe(
-                df_words, 
-                use_container_width=True, 
-                hide_index=True,
-                height=400  # 🔴 关键修改：表格高度加高
-            )
-        else:
-            st.caption("No data.")
+    # 头部：分类选择
+    c_head1, c_head2 = st.columns([2, 1])
+    with c_head1:
+        target_cat = st.selectbox("Category", list(WAREHOUSE.keys()), label_visibility="collapsed")
+    with c_head2:
+        current_words = st.session_state.db_all.get(target_cat, [])
+        # 纯数字统计
+        st.markdown(f"<div style='text-align:right; padding-top:10px; color:#666;'>Count: {len(current_words)}</div>", unsafe_allow_html=True)
 
-    # 3. 删除功能 (多选)
-    with st.expander("Manage / Delete", expanded=False):
-        if current_words:
-            to_delete = st.multiselect(
-                "Select items to delete:", 
-                options=current_words
-            )
-            if to_delete:
-                if st.button("Delete Selected", type="primary", use_container_width=True):
-                    new_list = [w for w in current_words if w not in to_delete]
-                    st.session_state.db_all[target_cat] = new_list
-                    save_data(WAREHOUSE[target_cat], new_list)
+    st.write("")
+    st.markdown("##### Inventory")
+    
+    # 🔴 瀑布流标签云 (Multiselect)
+    # 纯净版：没有任何 Emoji 提示
+    updated_list = st.multiselect(
+        label="Inventory View",
+        options=current_words,
+        default=current_words, 
+        key=f"tag_cloud_{target_cat}",
+        label_visibility="collapsed"
+    )
+    
+    # 监听删除
+    if len(updated_list) < len(current_words):
+        st.session_state.db_all[target_cat] = updated_list
+        save_data(WAREHOUSE[target_cat], updated_list)
+        st.rerun()
+
+    # 底部：手动添加 (无符号)
+    st.write("")
+    with st.expander("Manual Add", expanded=False):
+        c_add1, c_add2 = st.columns([3, 1])
+        with c_add1:
+            new_word = st.text_input("New Keyword", label_visibility="collapsed")
+        with c_add2:
+            if st.button("Add", use_container_width=True):
+                if new_word and new_word not in current_words:
+                    current_words.append(new_word)
+                    st.session_state.db_all[target_cat] = current_words
+                    save_data(WAREHOUSE[target_cat], current_words)
                     st.rerun()
