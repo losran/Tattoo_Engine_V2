@@ -29,28 +29,28 @@ if "ai_results" not in st.session_state: st.session_state.ai_results = []
 if "input_text" not in st.session_state: st.session_state.input_text = ""
 
 # ===========================
-# 2. 标题区 (现在应该能看见了)
+# 2. 标题区
 # ===========================
 st.markdown("## Tattoo Engine V2") 
 st.markdown("---")
 
 # ===========================
-# 3. 左右分栏 (左窄右宽)
+# 3. 左右分栏 (2:1) -> 左大右小
 # ===========================
-# 调整比例让右边更宽敞，显得不那么挤
-col_ingest, col_warehouse = st.columns([1, 2.5])
+col_ingest, col_warehouse = st.columns([2, 1])
 
 # ===========================
-# 4. 左侧：智能入库
+# 4. 左侧：智能入库 (大头)
 # ===========================
 with col_ingest:
     st.markdown("#### Smart Ingest")
     st.caption("AI Parser")
     
+    # 输入框高度增加到 200，利用左侧空间
     st.session_state.input_text = st.text_area(
         "Raw Input",
         st.session_state.input_text,
-        height=100, 
+        height=200, 
         placeholder="Paste text here...",
         label_visibility="collapsed"
     )
@@ -94,7 +94,7 @@ with col_ingest:
         st.write("")
         st.caption("Preview")
         df_preview = pd.DataFrame(st.session_state.ai_results)
-        st.dataframe(df_preview, use_container_width=True, hide_index=True, height=150)
+        st.dataframe(df_preview, use_container_width=True, hide_index=True, height=200)
         
         if st.button("Import to Warehouse", use_container_width=True):
             changed_cats = set()
@@ -114,31 +114,30 @@ with col_ingest:
                 st.rerun()
 
 # ===========================
-# 5. 右侧：紧凑型清单 (Super Tight)
+# 5. 右侧：紧凑型清单 (小头)
 # ===========================
 with col_warehouse:
     # 头部工具栏
-    c1, c2, c3 = st.columns([2, 2, 2])
+    c1, c2, c3 = st.columns([2, 2, 1.5])
     with c1:
         st.markdown("#### Warehouse")
     with c2:
-        # 下拉框现在是纯黑色的了
+        # 这里的下拉框现在是纯黑的了 (见 style_manager)
         target_cat = st.selectbox("Category", list(WAREHOUSE.keys()), label_visibility="collapsed")
     with c3:
         current_words = st.session_state.db_all.get(target_cat, [])
         st.markdown(f"<div style='text-align:right; padding-top: 5px; color:#666; font-size: 0.9em;'>{len(current_words)} Items</div>", unsafe_allow_html=True)
 
-    # 列表容器 (高度拉高到 700px)
+    # 列表容器 (高度700，在右侧形成一个长条)
     with st.container(height=700, border=True):
         if not current_words:
             st.caption("No items.")
         else:
             for i, word in enumerate(current_words):
-                # 每一行的布局
-                row_c1, row_c2 = st.columns([0.9, 0.1])
+                # 布局调整：给删除按钮留小一点的位置 (0.15)，因为右侧整体变窄了
+                row_c1, row_c2 = st.columns([0.85, 0.15])
                 
                 with row_c1:
-                    # 🔴 极度紧凑的样式：padding 减小到 5px 10px
                     st.markdown(f"""
                     <div style="
                         background-color: #0e0e0e; 
@@ -156,7 +155,6 @@ with col_warehouse:
                     """, unsafe_allow_html=True)
                 
                 with row_c2:
-                    # 删除按钮
                     if st.button("✕", key=f"del_{target_cat}_{i}_{word}", use_container_width=True):
                         new_list = [w for w in current_words if w != word]
                         st.session_state.db_all[target_cat] = new_list
@@ -164,13 +162,4 @@ with col_warehouse:
                         st.rerun()
 
     # 底部快速添加
-    c_add1, c_add2 = st.columns([4, 1])
-    with c_add1:
-        new_word_in = st.text_input("Add new item...", label_visibility="collapsed")
-    with c_add2:
-        if st.button("Add", use_container_width=True):
-            if new_word_in and new_word_in not in current_words:
-                current_words.append(new_word_in)
-                st.session_state.db_all[target_cat] = current_words
-                save_data(WAREHOUSE[target_cat], current_words)
-                st.rerun()
+    c_add1, c_add2 = st.
