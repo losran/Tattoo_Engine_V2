@@ -76,8 +76,8 @@ with c_input:
 with c_qty:
     qty = st.number_input("Qty", min_value=1, max_value=10, value=4, label_visibility="collapsed")
 with c_btn:
-    # 使用 T 翻译按钮 (这里暂时用 "Generate", 你可以在字典里加一个 "gen_btn")
-    run_btn = st.button("Generate", type="primary", use_container_width=True)
+    # 🔥 已修复：使用 T("gen_btn") 进行翻译
+    run_btn = st.button(T("gen_btn"), type="primary", use_container_width=True)
 
 # ===========================
 # 5. 生成逻辑
