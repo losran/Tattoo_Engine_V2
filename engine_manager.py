@@ -3,7 +3,7 @@ import os
 import requests
 
 # ==========================================
-# 1. 仓库配置 (精准映射你的目录结构)
+# 1. 仓库配置
 # ==========================================
 REPO = "losran/Tattoo_Engine_V2"
 BRANCH = "main"
@@ -65,40 +65,36 @@ def save_data(file_key, new_list):
         st.session_state.db_all[logic_key[0]] = new_list
 
 # ==========================================
-# 4. 侧边栏 (Sidebar) - 核心修复位置 🛠️
+# 4. 侧边栏 (Sidebar) - 极致精简版
 # ==========================================
 def render_sidebar():
     with st.sidebar:
-        # 显示 Logo
+        # 1. Logo
         st.logo("images/logo.png", icon_image="images/logo.png")
         
         st.subheader("Engine V2 Console")
         st.markdown("---")
         
-        # 库存监控
+        # 2. 库存监控 (改用纯文本，防止被折叠)
         if "db_all" in st.session_state:
             db = st.session_state.db_all
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Graphic", len(db.get("Subject", [])))
-            c2.metric("Styles", len(db.get("StyleSystem", [])))
-            c3.metric("Refs", len(db.get("Ref_Images", [])))
+            
+            # 直接显示统计数字，不花里胡哨
+            c_sub = len(db.get("Subject", []))
+            c_sty = len(db.get("StyleSystem", []))
+            c_ref = len(db.get("Ref_Images", []))
+            
+            st.caption("📦 Inventory Status")
+            st.markdown(f"**Graphic**: {c_sub}")
+            st.markdown(f"**Styles**: {c_sty}")
+            st.markdown(f"**Refs**: {c_ref}")
         
         st.markdown("---")
-        
-        # 👇 修复后的刷新按钮逻辑
-        if st.button("🔄 Refresh Data", use_container_width=True):
-            st.cache_data.clear()
-            
-            # 修复点：先把 keys 转成 list 列表再遍历，或者直接赋值空字典
-            keys_to_delete = list(st.session_state.db_all.keys()) 
-            for key in keys_to_delete:
-                del st.session_state.db_all[key]
-                
-            init_data()
-            st.rerun()
+        # 3. 刷新按钮已永久移除
+        st.caption("Data auto-loaded on startup.")
 
 # ==========================================
-# 5. 图库扫描 (只看 gallery)
+# 5. 图库扫描
 # ==========================================
 @st.cache_data(ttl=600)
 def fetch_image_refs_auto():
