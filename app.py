@@ -32,34 +32,31 @@ if "ai_results" not in st.session_state: st.session_state.ai_results = []
 if "input_text" not in st.session_state: st.session_state.input_text = ""
 
 # ===========================
-# 2. 界面布局 (去 Emoji 极简风)
+# 2. 界面布局 (调整比例)
 # ===========================
 st.title("Tattoo Engine V2")
 st.caption("Smart Ingest & Asset Management")
 st.divider()
 
-col_ingest, col_warehouse = st.columns([2, 1])
+# 🔴 关键修改：左 1 : 右 1.2 (右边更宽敞)
+col_ingest, col_warehouse = st.columns([1, 1.2])
 
 # ===========================
-# 3. 左侧：智能入库 (Smart Ingest)
+# 3. 左侧：智能入库 (更紧凑)
 # ===========================
 with col_ingest:
     st.subheader("Smart Ingest")
     
+    # 🔴 关键修改：高度减小到 120 (更精致)
     st.session_state.input_text = st.text_area(
         "Raw Input",
         st.session_state.input_text,
-        height=180,
-        placeholder="Paste your messy inspiration or keywords here..."
+        height=120, 
+        placeholder="Input keywords..."
     )
 
-    # 按钮区
-    c1, c2 = st.columns([1, 4])
-    with c1:
-        analyze_btn = st.button("Analyze", type="primary", use_container_width=True)
-    
-    # --- AI 分析逻辑 ---
-    if analyze_btn:
+    # 按钮
+    if st.button("Analyze", type="primary", use_container_width=True):
         if not st.session_state.input_text:
             st.warning("Input is empty")
         elif not client:
@@ -69,19 +66,8 @@ with col_ingest:
                 prompt = f"""
                 Task: Extract keywords from tattoo description into JSON.
                 Categories: {", ".join(WAREHOUSE.keys())}
-                
-                Rules:
-                1. Distinguish StyleSystem (Art genre) vs Technique (Drawing method).
-                2. Return JSON ONLY. No markdown.
-                
-                Format:
-                {{
-                    "Subject": ["item1"],
-                    "StyleSystem": ["style1"],
-                    "Technique": ["tech1"],
-                    "Mood": ["mood1"]
-                }}
-                
+                Rules: Return JSON ONLY. No markdown.
+                Format: {{"Subject": ["item1"], "StyleSystem": ["style1"]}}
                 Input: {st.session_state.input_text}
                 """
                 try:
@@ -91,40 +77,30 @@ with col_ingest:
                         temperature=0.1
                     ).choices[0].message.content
                     
-                    # 强力清洗 JSON
                     clean_json = res.replace("```json", "").replace("```", "").strip()
                     data = json.loads(clean_json)
                     
                     parsed = []
                     for cat, words in data.items():
-                        # 模糊匹配 Key
                         target_key = None
                         for k in WAREHOUSE:
-                            if k.lower() == cat.lower(): 
-                                target_key = k
-                                break
-                        
+                            if k.lower() == cat.lower(): target_key = k; break
                         if target_key and isinstance(words, list):
-                            for w in words:
-                                parsed.append({"Category": target_key, "Keyword": w})
+                            for w in words: parsed.append({"Category": target_key, "Keyword": w})
                                 
                     st.session_state.ai_results = parsed
-                    
                 except Exception as e:
-                    st.error(f"Analysis failed: {e}")
+                    st.error(f"Error: {e}")
 
-    # --- 结果确认区 (表格化展示) ---
+    # 结果预览
     if st.session_state.ai_results:
         st.write("")
-        st.subheader("Results Preview")
-        
-        # 转换为 DataFrame 展示，更整齐
+        st.caption("Preview")
         df_preview = pd.DataFrame(st.session_state.ai_results)
         st.dataframe(df_preview, use_container_width=True, hide_index=True)
         
-        if st.button("Confirm Import", type="primary"):
+        if st.button("Confirm Import", type="secondary", use_container_width=True):
             changed_cats = set()
-            count = 0
             for item in st.session_state.ai_results:
                 cat, val = item["Category"], item["Keyword"]
                 current_list = st.session_state.db_all.get(cat, [])
@@ -132,62 +108,48 @@ with col_ingest:
                     current_list.append(val)
                     st.session_state.db_all[cat] = current_list
                     changed_cats.add(cat)
-                    count += 1
             
-            # 保存逻辑
             if changed_cats:
                 for c in changed_cats:
                     save_data(WAREHOUSE[c], st.session_state.db_all[c])
-                st.success(f"Imported {count} new keywords.")
-                st.session_state.ai_results = [] # 清空结果
+                st.success("Imported.")
+                st.session_state.ai_results = []
                 st.rerun()
-            else:
-                st.info("No new unique keywords found.")
 
 # ===========================
-# 4. 右侧：仓库管理 (修复删除功能)
+# 4. 右侧：仓库管理 (更宽敞)
 # ===========================
 with col_warehouse:
     st.subheader("Warehouse")
     
     # 1. 选择分类
     target_cat = st.selectbox("Category", list(WAREHOUSE.keys()))
-    
-    # 获取当前数据
     current_words = st.session_state.db_all.get(target_cat, [])
     
-    # 2. 展示数据 (使用容器 + DataFrame，干净整洁)
+    # 2. 展示数据 (容器高度增加，显示更多行)
     with st.container(border=True):
+        st.caption(f"Total: {len(current_words)}")
         if current_words:
-            # 简单展示列表
-            st.markdown(f"**Total Items:** {len(current_words)}")
+            df_words = pd.DataFrame(current_words, columns=["Keywords"])
             st.dataframe(
-                pd.DataFrame(current_words, columns=["Keywords"]), 
+                df_words, 
                 use_container_width=True, 
                 hide_index=True,
-                height=300
+                height=400  # 🔴 关键修改：表格高度加高
             )
         else:
-            st.caption("No data in this category.")
+            st.caption("No data.")
 
-    # 3. 删除功能 (改为多选删除，解决按钮卡死问题)
+    # 3. 删除功能 (多选)
     with st.expander("Manage / Delete", expanded=False):
         if current_words:
             to_delete = st.multiselect(
                 "Select items to delete:", 
-                options=current_words,
-                placeholder="Choose keywords..."
+                options=current_words
             )
-            
             if to_delete:
-                if st.button("Delete Selected", type="secondary", use_container_width=True):
-                    # 执行删除
+                if st.button("Delete Selected", type="primary", use_container_width=True):
                     new_list = [w for w in current_words if w not in to_delete]
                     st.session_state.db_all[target_cat] = new_list
-                    
-                    # 保存
                     save_data(WAREHOUSE[target_cat], new_list)
-                    st.success("Deleted.")
                     st.rerun()
-        else:
-            st.caption("Nothing to delete.")
