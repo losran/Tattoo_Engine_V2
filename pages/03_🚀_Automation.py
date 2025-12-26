@@ -13,27 +13,20 @@ st.set_page_config(layout="wide", page_title="Automation Central")
 apply_pro_style()
 render_sidebar()
 
-st.title("Automation Central (Pro V17)")
-st.caption("Auto-Detect & Data Receiver (自动接收数据 + 智能状态检测)")
+st.title("Automation Central")
+st.caption("Batch Processing Center (批量处理中心)")
 
 # ===========================
-# 2. 🟢 核心修复：自动接收上游数据
+# 2. 🟢 核心修复：读取全局购物车
 # ===========================
-# 逻辑：检查是否有来自 Page 01 或 02 的新数据 (final_solutions)
-incoming_data = ""
+# 初始化队列
+if "global_queue" not in st.session_state:
+    st.session_state.global_queue = []
 
-if "final_solutions" in st.session_state and st.session_state.final_solutions:
-    raw_data = st.session_state.final_solutions
-    
-    # 如果是列表（通常是列表），就合并成字符串
-    if isinstance(raw_data, list):
-        incoming_data = "\n\n".join(raw_data)
-    else:
-        incoming_data = str(raw_data)
-
-# 如果 session 里没有数据，尝试读取一下缓存（防止手滑刷新丢数据）
-if not incoming_data:
-    incoming_data = st.session_state.get("auto_input_cache", "")
+# 将列表转换为文本显示
+current_queue_text = ""
+if st.session_state.global_queue:
+    current_queue_text = "\n\n".join(st.session_state.global_queue)
 
 # ===========================
 # 3. 界面布局
@@ -43,72 +36,61 @@ with col_opt1:
     target_platform = st.selectbox(
         "Target AI Platform", 
         ["ChatGPT (Specialized)", "Midjourney Web", "Universal"],
-        index=0, 
-        help="ChatGPT 模式包含针对性的 DOM 检测逻辑"
+        index=0
     )
 
-# 输入框：自动填入接收到的数据
-# 注意：这里我们不使用 key 来绑定值，而是直接用 value，避免状态冲突
+with col_opt2:
+    # 显示当前队列数量
+    count = len(st.session_state.global_queue)
+    st.metric("Pending Tasks", count)
+
+# 输入框 (允许用户手动编辑购物车)
 user_input = st.text_area(
-    "Prompt Queue", 
-    value=incoming_data, 
-    height=350, 
-    placeholder="等待投递数据..."
+    "Global Task Queue", 
+    value=current_queue_text, 
+    height=400, 
+    placeholder="Queue is empty. Go to Graphic Lab or Text Studio to generate tasks."
 )
 
-# 当用户手动修改输入框时，我们可以更新一下缓存（可选）
-if user_input != incoming_data:
-    st.session_state.auto_input_cache = user_input
+# 🔄 双向绑定：如果用户手动改了输入框，也要更新回队列
+if user_input != current_queue_text:
+    # 简单的按双换行符分割回写
+    st.session_state.global_queue = [t.strip() for t in user_input.split('\n\n') if t.strip()]
 
 # ===========================
-# 4. 选项与操作
+# 4. 生成脚本逻辑
 # ===========================
 st.divider()
-col_check, col_btn = st.columns([1, 2])
-with col_check:
-    need_white_bg = st.checkbox("Production Mode: Auto White Background", value=False)
+c1, c2 = st.columns([1, 2])
+with c1:
+    if st.button("🗑️ Clear Queue", use_container_width=True):
+        st.session_state.global_queue = []
+        st.rerun()
 
-# ===========================
-# 5. 生成脚本逻辑 (保留 V16 发送按钮检测)
-# ===========================
-with col_btn:
-    if st.button("Generate Script (Smart Wait)", type="primary", use_container_width=True):
-        # --- A. 任务解析 ---
+with c2:
+    if st.button("🚀 Generate Script (Execute Batch)", type="primary", use_container_width=True):
+        # A. 解析
         task_list = []
         if user_input:
-            if "###" in user_input:
-                raw_tasks = [t.strip() for t in user_input.split("###") if len(t.strip()) > 2]
-            else:
-                # 正则匹配 **Option 1:** 或 **方案1：**
-                blocks = re.split(r'\*\*.*?(?:Option|方案|Scheme).*?[\d]+[:：].*?\*\*', user_input)
-                # 过滤掉太短的碎片
-                raw_tasks = []
-                # 重新通过原始文本行来抓取完整 Prompt (正则分割有时会吞掉前缀)
-                # 简单粗暴法：按双换行分割，然后清理空行
-                lines = user_input.split('\n\n')
-                for line in lines:
-                    clean_line = line.strip()
-                    if len(clean_line) > 5:
-                        # 去掉可能存在的 **Option X:** 前缀，只保留核心 Prompt
-                        # 但为了保留 ChatGPT 的上下文，保留前缀也是可以的，这里选择保留原样
-                        clean_line = clean_line.replace("(Invalid API Key - Raw Data Used)", "").strip()
-                        raw_tasks.append(clean_line)
+            # 智能清洗：去掉前缀，只留核心Prompt
+            lines = user_input.split('\n\n')
+            for line in lines:
+                clean_line = line.strip()
+                # 去掉 (Invalid API Key...) 这种报错后缀
+                clean_line = clean_line.split("(Invalid")[0].strip()
+                # 去掉 **Option X:** 这种前缀 (可选，根据你的喜好)
+                # clean_line = re.sub(r'\*\*Option \d+:\*\*\s*', '', clean_line) 
                 
-            if need_white_bg:
-                for t in raw_tasks:
-                    task_list.append(t)
-                    task_list.append("Generate a white background version of the image above")
-            else:
-                task_list = raw_tasks
+                if len(clean_line) > 5:
+                    task_list.append(clean_line)
 
-        # --- B. 脚本构建 ---
+        # B. 生成代码
         if task_list:
             encoded_data = urllib.parse.quote(json.dumps(task_list))
             
-            # JS 核心代码 (V16 逻辑：检测 Send 按钮)
             js_code = f"""(async function() {{
                 console.clear();
-                console.log("%c 🚀 自动化脚本 V17 已启动 ", "background: #222; color: #bada55; font-size: 16px");
+                console.log("%c 🚀 Automation V18 Started ", "background: #222; color: #bada55; font-size: 16px");
                 
                 window.kill = false;
                 const tasks = JSON.parse(decodeURIComponent("{encoded_data}"));
@@ -139,7 +121,6 @@ with col_btn:
                            document.querySelector('button[aria-label="Send prompt"]');
                 }}
 
-                // 核心：只要没有发送按钮，或者按钮是灰的，就认为是在忙
                 function isBusy() {{
                     const sendBtn = getSendBtn();
                     const stopBtn = document.querySelector('[aria-label="Stop generating"]') || document.querySelector('[data-testid="stop-button"]');
@@ -149,19 +130,19 @@ with col_btn:
                     return false;
                 }}
 
-                showStatus("🚀 脚本就绪，任务数: " + tasks.length, "#444444"); 
+                showStatus("🚀 Tasks: " + tasks.length, "#444444"); 
                 
                 for (let i = 0; i < tasks.length; i++) {{
-                    if (window.kill) {{ showStatus("🛑 已停止", "#ef4444"); break; }}
+                    if (window.kill) {{ showStatus("🛑 Stopped", "#ef4444"); break; }}
                     
-                    showStatus("✍️ 正在输入: " + (i+1) + "/" + tasks.length, "#3b82f6");
+                    showStatus("✍️ Input: " + (i+1) + "/" + tasks.length, "#3b82f6");
                     
                     let box = getInputBox();
                     if (!box) {{ 
-                        showStatus("❌ 找不到输入框，尝试重试...", "#ef4444"); 
+                        showStatus("❌ No Input Box", "#ef4444"); 
                         await new Promise(r => setTimeout(r, 2000));
                         box = getInputBox();
-                        if(!box) {{ alert("脚本无法定位输入框，请刷新页面"); break; }}
+                        if(!box) {{ alert("Can't find input box"); break; }}
                     }}
                     
                     box.focus();
@@ -183,17 +164,17 @@ with col_btn:
                     }}
                     
                     if (i < tasks.length - 1) {{
-                        showStatus("⏳ 等待服务器响应...", "#f59e0b");
+                        showStatus("⏳ Waiting...", "#f59e0b");
                         await new Promise(r => setTimeout(r, 5000));
                         
                         let waitSec = 0;
                         while(true) {{
                             if (window.kill) break;
                             if (isBusy()) {{
-                                showStatus("🎨 正在绘图 (" + waitSec + "s)...", "#6366f1");
+                                showStatus("🎨 Generating (" + waitSec + "s)...", "#6366f1");
                                 await new Promise(r => setTimeout(r, 1000));
                                 waitSec++;
-                                if (waitSec > 600) break; // 10分钟超时
+                                if (waitSec > 600) break;
                             }} else {{
                                 break; 
                             }}
@@ -201,12 +182,12 @@ with col_btn:
                         
                         for (let s = 5; s > 0; s--) {{
                             if (window.kill) break;
-                            showStatus("✅ 完成. 冷却中: " + s + "s", "#10b981");
+                            showStatus("✅ Cooldown: " + s + "s", "#10b981");
                             await new Promise(r => setTimeout(r, 1000));
                         }}
                     }}
                 }}
-                if(!window.kill) showStatus("🎉 所有任务执行完毕！", "#15803d");
+                if(!window.kill) showStatus("🎉 All Done!", "#15803d");
             }})();"""
 
             js_val = json.dumps(js_code)
@@ -219,14 +200,8 @@ with col_btn:
             </script>
             """, height=0)
 
-            st.success(f"已生成 {len(task_list)} 条指令，脚本已复制到剪贴板！")
+            st.success(f"Generated script for {len(task_list)} tasks (Copied!)")
             st.code(js_code, language="javascript")
             
         else:
-            st.error("队列为空，无法生成脚本")
-
-# 底部清空按钮
-if st.button("Clear Queue"):
-    st.session_state.final_solutions = []
-    st.session_state.auto_input_cache = ""
-    st.rerun()
+            st.error("Queue is empty")
