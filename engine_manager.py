@@ -67,7 +67,7 @@ def save_data(file_key, new_list):
         st.session_state.db_all[logic_key[0]] = new_list
 
 # ==========================================
-# 4. 侧边栏 (Sidebar) - 无符号纯净版
+# 4. 侧边栏 (Sidebar) - 垂直清单版 (Vertical List)
 # ==========================================
 def render_sidebar():
     with st.sidebar:
@@ -77,37 +77,33 @@ def render_sidebar():
         st.subheader("Console")
         st.markdown("---")
         
-        # 库存监控 (纯文本列表)
+        # 库存监控 (垂直排列，不分栏，最稳)
         if "db_all" in st.session_state:
             db = st.session_state.db_all
             
-            # --- 分组 1: Graphic ---
-            st.markdown("**Graphic Core**")
-            c1, c2 = st.columns(2)
-            c1.markdown(f"Subject: {len(db.get('Subject', []))}")
-            c2.markdown(f"Action: {len(db.get('Action', []))}")
+            # --- Part 1: Graphic ---
+            st.markdown("### Graphic Core")
+            st.markdown(f"**Subject:** {len(db.get('Subject', []))}")
+            st.markdown(f"**Action:** {len(db.get('Action', []))}")
             
-            st.write("") # 空行间距
+            st.markdown("---")
             
-            # --- 分组 2: Style ---
-            st.markdown("**Style Matrix**")
-            c3, c4 = st.columns(2)
-            with c3:
-                st.markdown(f"Sys: {len(db.get('StyleSystem', []))}")
-                st.markdown(f"Col: {len(db.get('Color', []))}")
-                st.markdown(f"Tex: {len(db.get('Texture', []))}")
-            with c4:
-                st.markdown(f"Tech: {len(db.get('Technique', []))}")
-                st.markdown(f"Comp: {len(db.get('Composition', []))}")
-                st.markdown(f"Acc: {len(db.get('Accent', []))}")
+            # --- Part 2: Style ---
+            st.markdown("### Style Matrix")
+            st.markdown(f"**System:** {len(db.get('StyleSystem', []))}")
+            st.markdown(f"**Technique:** {len(db.get('Technique', []))}")
+            st.markdown(f"**Color:** {len(db.get('Color', []))}")
+            st.markdown(f"**Texture:** {len(db.get('Texture', []))}")
+            st.markdown(f"**Composition:** {len(db.get('Composition', []))}")
+            st.markdown(f"**Accent:** {len(db.get('Accent', []))}")
             
-            st.write("") 
+            st.markdown("---")
             
-            # --- 分组 3: Others ---
-            st.markdown("**Assets**")
-            st.markdown(f"Mood: {len(db.get('Mood', []))}")
-            st.markdown(f"Words: {len(db.get('Text_English', []))}")
-            st.markdown(f"Refs: {len(db.get('Ref_Images', []))}")
+            # --- Part 3: Assets ---
+            st.markdown("### Assets")
+            st.markdown(f"**Mood:** {len(db.get('Mood', []))}")
+            st.markdown(f"**Words:** {len(db.get('Text_English', []))}")
+            st.markdown(f"**Refs:** {len(db.get('Ref_Images', []))}")
 
 # ==========================================
 # 5. 图库扫描
