@@ -7,162 +7,96 @@ def apply_pro_style():
     <style>
         @import url('{font_url}');
 
-        /* ============================
-           1. 布局修正 (修复按钮点不到的问题)
-           ============================ */
-        .block-container {{
-            padding-top: 4rem !important;
-            padding-bottom: 2rem !important;
-            padding-left: 2rem !important;
-            padding-right: 2rem !important;
-            max-width: 100% !important;
-        }}
-        
-        /* 🔴 关键修复：不要隐藏 Header，而是让它透明且“穿透” */
-        header {{ 
-            background-color: transparent !important;
-            pointer-events: none !important; /* 让鼠标点击穿透 Header 背景 */
-        }}
-        
-        /* 隐藏汉堡菜单和页脚，但不隐藏 Header 容器 */
-        #MainMenu, footer, [data-testid="stDecoration"] {{ 
-            visibility: hidden !important; 
-            display: none !important;
-        }} 
-
-        /* 全局深色 */
-        .stApp {{ background-color: #000000; }}
-        html, body, p, div, span, button, input, textarea, label, h1, h2, h3, h4, h5, h6 {{ 
+        /* 1. 基础全局样式 */
+        html, body, [class*="css"], font, span, div, h1, h2, h3, h4, h5, h6, p, a, button, input, textarea, label {{
             font-family: 'Poppins', 'Noto Sans SC', sans-serif !important;
-            color: #d0d0d0; 
+            color: #d0d0d0;
         }}
+        .stApp {{ background-color: #000000; }}
 
-        /* ============================
-           2. 侧边栏按钮 (钉死在左上角)
-           =========================== */
-        /* 恢复按钮的鼠标响应 */
-        [data-testid="stSidebarCollapsedControl"], [data-testid="stSidebarExpandedControl"] {{
-            pointer-events: auto !important; /* 恢复点击 */
-            cursor: pointer !important;
-            visibility: visible !important;
-            display: flex !important;
-            
-            /* 强制固定定位：永远浮在最上层 */
-            position: fixed !important;
-            top: 1.2rem !important;
-            left: 1.2rem !important;
-            z-index: 9999999 !important;
-            
-            /* 样式 */
-            background-color: #000 !important;
+        /* 2. 侧边栏与头部纯净化 */
+        [data-testid="stSidebar"] {{ background-color: #0a0a0a !important; border-right: 1px solid #1a1a1a !important; z-index: 99998 !important; }}
+        [data-testid="stSidebarUserContent"] {{ padding-top: 3.5rem !important; }}
+        [data-testid="stToolbarActions"], [data-testid="stStatusWidget"], [data-testid="stDecoration"] {{ display: none !important; }}
+        header[data-testid="stHeader"] {{ background-color: rgba(0,0,0,0.8) !important; border-bottom: 1px solid #1a1a1a !important; height: 3.5rem !important; }}
+
+        /* 3. 清除顶部幽灵文字并重绘箭头 */
+        [data-testid="stHeader"] button[data-testid*="Sidebar"] * {{ display: none !important; }}
+        [data-testid="stHeader"] button[data-testid*="Sidebar"] {{
             border: 1px solid #333 !important;
-            border-radius: 4px !important;
+            background-color: #111 !important;
             width: 36px !important;
             height: 36px !important;
-            align-items: center !important;
-            justify-content: center !important;
+            position: relative !important;
         }}
-
-        /* 隐藏按钮内部原本的 SVG 图标 */
-        [data-testid="stSidebarCollapsedControl"] svg, [data-testid="stSidebarExpandedControl"] svg {{
-            display: none !important;
-        }}
-
-        /* 纯 CSS 绘制箭头 (你的经典逻辑) */
-        [data-testid="stSidebarCollapsedControl"]::after, [data-testid="stSidebarExpandedControl"]::after {{
+        [data-testid="stHeader"] button[data-testid*="Sidebar"]::after {{
             content: "" !important;
             display: block !important;
-            width: 8px !important;
-            height: 8px !important;
+            position: absolute !important;
+            top: 50% !important; left: 50% !important;
+            width: 8px !important; height: 8px !important;
             border-top: 2px solid #888 !important;
             border-right: 2px solid #888 !important;
-            transition: transform 0.2s;
         }}
-        /* 箭头方向 */
-        [data-testid="stSidebarCollapsedControl"]::after {{ transform: rotate(45deg); margin-left: -2px; }}
-        [data-testid="stSidebarExpandedControl"]::after {{ transform: rotate(-135deg); margin-right: -2px; }}
+        [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"]::after {{ transform: translate(-65%, -50%) rotate(45deg) !important; }}
+        [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"]::after {{ transform: translate(-35%, -50%) rotate(-135deg) !important; }}
 
-        /* Hover 高亮 */
-        [data-testid="stSidebarCollapsedControl"]:hover, [data-testid="stSidebarExpandedControl"]:hover {{
-            border-color: #fff !important;
-            background-color: #1a1a1a !important;
+        /* 4. 核心对齐锁死 (42px 绝对对齐) */
+        [data-testid="column"] {{
+            display: flex !important;
+            align-items: flex-end !important;
         }}
-        [data-testid="stSidebarCollapsedControl"]:hover::after, [data-testid="stSidebarExpandedControl"]:hover::after {{
-            border-color: #fff !important;
+        div[data-testid="stNumberInput"] div[data-baseweb="input"],
+        div[data-testid="stButton"] button {{
+            height: 42px !important;
+            min-height: 42px !important;
+            box-sizing: border-box !important;
         }}
+        div[data-testid="stNumberInput"] label {{ display: none !important; }}
+        div[data-testid="stNumberInput"] input {{ height: 42px !important; }}
+        div[data-testid="stButton"] button p {{ line-height: 42px !important; margin: 0 !important; }}
 
-        /* ============================
-           3. 下拉菜单纯黑化
-           ============================ */
-        div[data-baseweb="select"] > div {{
-            background-color: #0a0a0a !important;
-            border-color: #333 !important;
-            color: #eee !important;
-        }}
-        ul[data-testid="stSelectboxVirtualDropdown"] {{
-            background-color: #0a0a0a !important;
-            border: 1px solid #333 !important;
-        }}
-        li[role="option"] {{ color: #ccc !important; }}
-        li[role="option"]:hover {{ background-color: #1a1a1a !important; }}
-        li[aria-selected="true"] {{ background-color: #222 !important; color: #fff !important; }}
-        .stSelectbox label {{ display: none !important; }}
-
-        /* ============================
-           4. 输入框 & 数字框 (纯黑+浅灰聚焦)
-           =========================== */
-        .stTextArea textarea, .stTextInput input {{
-            background-color: #0a0a0a !important;
-            border: 1px solid #333 !important;
-            color: #e0e0e0 !important;
-            caret-color: #fff !important;
-        }}
-        div[data-testid="stNumberInput"] div[data-baseweb="input"] {{
-            background-color: #0a0a0a !important;
-            border: 1px solid #333 !important;
-            color: #e0e0e0 !important;
-        }}
+        /* =======================================================
+           5. 响应式适配：解决平板与手机的重叠与换行
+           ======================================================= */
         
-        /* 聚焦状态：浅灰色边框，无红色阴影 */
-        .stTextArea textarea:focus, .stTextInput input:focus, div[data-baseweb="select"] > div:focus-within, div[data-testid="stNumberInput"] div[data-baseweb="input"]:focus-within {{
-            border-color: #777 !important;
-            box-shadow: none !important;
-            outline: none !important;
+        /* 平板端适配 (屏幕宽度小于 1024px) */
+        @media (max-width: 1024px) {{
+            /* 解决重叠：允许列自动换行，不再硬挤 */
+            [data-testid="stHorizontalBlock"] {{
+                flex-wrap: wrap !important;
+                gap: 10px !important;
+            }}
+            /* 调节列宽度，防止按钮文字被挤爆 */
+            [data-testid="column"] {{
+                flex: 1 1 auto !important;
+                min-width: 120px !important;
+            }}
+            div[data-testid="stButton"] button p {{
+                font-size: 13px !important;
+                white-space: nowrap !important;
+            }}
         }}
 
-        /* ============================
-           5. 工业风按钮
-           =========================== */
-        div.stButton > button {{
-            background-color: #000000 !important;
-            color: #ccc !important;
-            border: 1px solid #333 !important;
-            border-radius: 4px !important;
-            transition: all 0.2s;
+        /* 手机端适配 (屏幕宽度小于 768px) */
+        @media (max-width: 768px) {{
+            /* 强制变成上下排列，解决一切水平对不齐的问题 */
+            [data-testid="stHorizontalBlock"] {{
+                flex-direction: column !important;
+            }}
+            [data-testid="column"], div[data-testid="stNumberInput"], div[data-testid="stButton"] {{
+                width: 100% !important;
+                max-width: 100% !important;
+            }}
+            /* 手机端按钮加一点间距 */
+            div[data-testid="stButton"] {{
+                margin-top: 5px !important;
+            }}
         }}
-        div.stButton > button[kind="primary"] {{
-            background-color: #000000 !important;
-            border-color: #555 !important;
-            color: #fff !important;
-        }}
-        div.stButton > button:hover, div.stButton > button[kind="primary"]:hover {{
-            background-color: #1a1a1a !important;
-            border-color: #888 !important;
-            color: #fff !important;
-        }}
-        div.stButton > button:contains("✕") {{
-            border-color: #331111 !important;
-            color: #663333 !important;
-            line-height: 1 !important;
-        }}
-        div.stButton > button:contains("✕"):hover {{
-            background-color: #330000 !important;
-            border-color: #ff4444 !important;
-            color: #ff4444 !important;
-        }}
-        
-        /* 侧边栏背景 */
-        [data-testid="stSidebar"] {{ background-color: #0a0a0a !important; border-right: 1px solid #1a1a1a !important; }}
 
+        /* 基础组件配色 */
+        :root {{ --primary-color: #C0C0C0 !important; }}
+        .stButton > button {{ border: 1px solid #333 !important; background: #111 !important; color: #888 !important; }}
+        .stButton > button:hover {{ border-color: #FFFFFF !important; color: #FFFFFF !important; }}
+        .stTextArea textarea, .stTextInput input {{ background-color: #111111 !important; border: 1px solid #333333 !important; color: #e0e0e0 !important; }}
     </style>
-    """, unsafe_allow_html=True)
