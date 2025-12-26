@@ -11,19 +11,15 @@ def apply_pro_style():
            1. 布局修正
            ============================ */
         .block-container {{
-            padding-top: 4rem !important; /* 顶部留白，防止标题被遮 */
+            padding-top: 4rem !important;
             padding-bottom: 2rem !important;
             padding-left: 2rem !important;
             padding-right: 2rem !important;
             max-width: 100% !important;
         }}
         
-        /* 隐藏顶部红线 */
-        header {{ visibility: hidden !important; }} 
-        #MainMenu {{ visibility: hidden; }}
-        footer {{ visibility: hidden; }}
+        header, #MainMenu, footer {{ visibility: hidden !important; }} 
 
-        /* 全局深色 */
         .stApp {{ background-color: #000000; }}
         html, body, p, div, span, button, input, textarea, label, h1, h2, h3, h4, h5, h6 {{ 
             font-family: 'Poppins', 'Noto Sans SC', sans-serif !important;
@@ -31,35 +27,38 @@ def apply_pro_style():
         }}
 
         /* ============================
-           2. 核心修复：下拉菜单纯黑化
+           2. 下拉菜单纯黑化 (修正版)
            ============================ */
-        /* 1. 输入框本体 */
+        /* 下拉框静态显示框 */
         div[data-baseweb="select"] > div {{
             background-color: #0a0a0a !important;
             border-color: #333 !important;
             color: #eee !important;
         }}
         
-        /* 2. 🔥 下拉弹出的菜单列表 (Popover) 🔥 */
+        /* 🔥 弹出的下拉列表 (Popover) 🔥 */
         ul[data-testid="stSelectboxVirtualDropdown"] {{
-            background-color: #0a0a0a !important; /* 菜单背景纯黑 */
-            border: 1px solid #333 !important;    /* 边框深灰 */
+            background-color: #0a0a0a !important;
+            border: 1px solid #333 !important;
         }}
         
-        /* 3. 选项悬停/选中状态 */
+        /* 选项样式 */
+        li[role="option"] {{
+            color: #ccc !important;
+        }}
         li[role="option"]:hover {{
-            background-color: #1a1a1a !important; /* 鼠标悬停微亮 */
+            background-color: #1a1a1a !important;
         }}
         li[aria-selected="true"] {{
-            background-color: #222 !important;    /* 选中项高亮 */
+            background-color: #222 !important;
             color: #fff !important;
         }}
         
-        /* Selectbox 的小标签文字 */
-        .stSelectbox label p {{ font-size: 0.9rem !important; color: #888 !important; }}
+        /* 隐藏 Selectbox 的 Label */
+        .stSelectbox label {{ display: none !important; }}
 
         /* ============================
-           3. 输入框优化
+           3. 输入框 & 按钮
            =========================== */
         .stTextArea textarea, .stTextInput input {{
             background-color: #0a0a0a !important;
@@ -71,9 +70,6 @@ def apply_pro_style():
             box-shadow: none !important;
         }}
 
-        /* ============================
-           4. 工业风按钮 (纯黑)
-           =========================== */
         div.stButton > button {{
             background-color: #000000 !important;
             color: #ccc !important;
@@ -87,10 +83,11 @@ def apply_pro_style():
             color: #fff !important;
         }}
         
-        /* 删除按钮特化 (暗红) */
+        /* 删除按钮特化 */
         div.stButton > button:contains("✕") {{
-            border-color: #442222 !important;
-            color: #884444 !important;
+            border-color: #331111 !important;
+            color: #663333 !important;
+            line-height: 1 !important; /* 修正X的位置 */
         }}
         div.stButton > button:contains("✕"):hover {{
             background-color: #330000 !important;
@@ -99,7 +96,7 @@ def apply_pro_style():
         }}
 
         /* ============================
-           5. 侧边栏修复
+           4. 侧边栏修复
            =========================== */
         [data-testid="stSidebar"] {{ background-color: #0a0a0a !important; border-right: 1px solid #1a1a1a !important; }}
         [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"] *, [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"] * {{ display: none !important; }}
