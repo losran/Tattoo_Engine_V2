@@ -54,7 +54,7 @@ def render_dark_card(content):
     # 使用 Streamlit 的背景色微调，做出卡片感
     st.markdown(f"""
     <div style="
-        background-color: #262730; 
+        background-color: #000000; 
         padding: 15px; 
         border-radius: 8px; 
         border: 1px solid #3d3d3d; 
