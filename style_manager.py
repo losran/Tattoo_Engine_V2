@@ -9,14 +9,14 @@ def apply_pro_style():
         @import url('{font_url}');
 
         /* =======================================================
-           1. 全局布局重构 (Layout Reset) - 新增
+           1. 全局布局修正 (Layout Fix) - 修复“飞天”问题
            ======================================================= */
-        /* 消灭顶部巨大留白，让内容顶天立地，利用率拉满 */
+        /* 之前是 1rem 太挤了，现在改为 3.5rem，正好给顶部留出呼吸空间 */
         .block-container {{
-            padding-top: 1rem !important;
-            padding-bottom: 0rem !important;
-            padding-left: 1.5rem !important;
-            padding-right: 1.5rem !important;
+            padding-top: 3.5rem !important;
+            padding-bottom: 2rem !important;
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
             max-width: 100% !important;
         }}
         
@@ -25,22 +25,14 @@ def apply_pro_style():
             font-family: 'Poppins', 'Noto Sans SC', sans-serif !important;
             color: #d0d0d0;
         }}
-        .stApp {{ background-color: #000000; }}
         
-        /* 隐藏无用的 Header/Footer */
-        header {{visibility: hidden;}}
-        footer {{visibility: hidden;}}
-        [data-testid="stToolbarActions"], [data-testid="stStatusWidget"], [data-testid="stDecoration"] {{ display: none !important; }}
-
-        /* =======================================================
-           2. 侧边栏布局 (Sidebar) - 保留你的设置
-           ======================================================= */
+        /* 侧边栏布局与防遮挡 (保留你的原版逻辑) */
         [data-testid="stSidebar"] {{ background-color: #0a0a0a !important; border-right: 1px solid #1a1a1a !important; z-index: 99998 !important; }}
         [data-testid="stSidebarUserContent"] {{ padding-top: 3.5rem !important; }}
         [data-testid="stLogo"] {{ height: auto !important; z-index: 99999 !important; }}
 
         /* =======================================================
-           3. 🔥 侧边栏按钮核心修复 (你的核心逻辑 - 完整保留) 🔥
+           2. 侧边栏按钮核心修复 (你的核心逻辑 - 完整保留)
            ======================================================= */
         /* 抹除 ghost text */
         [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"] *,
@@ -93,13 +85,23 @@ def apply_pro_style():
         /* Hover 反馈 */
         [data-testid="stHeader"] button:hover {{ border-color: #fff !important; background-color: #222 !important; }}
         [data-testid="stHeader"] button:hover::after {{ border-color: #fff !important; }}
-        header[data-testid="stHeader"] {{ background-color: rgba(0,0,0,0.6) !important; border-bottom: 1px solid #1a1a1a !important; height: 3.5rem !important; }}
+        
+        /* Header 背景半透明化，防止遮挡内容 */
+        header[data-testid="stHeader"] {{ 
+            background-color: rgba(0,0,0,0.8) !important; 
+            border-bottom: 1px solid #1a1a1a !important; 
+            height: 3.5rem !important; 
+        }}
+        
+        /* 隐藏无用的系统组件 */
+        [data-testid="stToolbarActions"], [data-testid="stStatusWidget"], [data-testid="stDecoration"] {{ display: none !important; }}
 
         /* =======================================================
-           4. 工业风组件升级 (New Stuff)
+           3. 工业风组件升级 (新增：纯黑按钮 + 输入框)
            ======================================================= */
-        
-        /* 纯黑按钮 (Pure Black Industrial) */
+        .stApp {{ background-color: #000000; }}
+
+        /* 纯黑按钮 */
         div.stButton > button {{
             background-color: #000000 !important;
             color: #e0e0e0 !important;
@@ -129,17 +131,18 @@ def apply_pro_style():
         }}
 
         /* =======================================================
-           5. 瀑布流标签云特化 (Tag Cloud Optimization)
+           4. 瀑布流标签云特化 (新增：防止误删 + 视觉优化)
            ======================================================= */
         
-        /* 核心：隐藏右侧那个危险的 "Clear all" (X) 按钮，防止误删整个仓库 */
+        /* 🔴 核心：隐藏右侧那个危险的 "Clear all" (X) 按钮 */
         button[title="Clear all"], div[role="button"][aria-label="Clear all"] {{
             display: none !important;
         }}
         
-        /* 强制拉伸标签区域高度 (82vh)，利用屏幕垂直空间 */
+        /* 强制拉伸标签区域高度 (80vh)，利用屏幕垂直空间 */
         div[data-baseweb="select"] > div:nth-child(2) {{
-             max-height: 82vh !important;
+             max-height: 80vh !important;
+             min-height: 400px !important;
              overflow-y: auto !important;
              background-color: #0a0a0a !important;
              border: 1px solid #222 !important;
