@@ -8,7 +8,7 @@ def apply_pro_style():
         @import url('{font_url}');
 
         /* ============================
-           1. 布局修正
+           1. 布局修正 (👉 修复点：这里改动了)
            ============================ */
         .block-container {{
             padding-top: 4rem !important;
@@ -18,7 +18,15 @@ def apply_pro_style():
             max-width: 100% !important;
         }}
         
-        header, #MainMenu, footer {{ visibility: hidden !important; }} 
+        /* 🔴 修改A：只隐藏菜单和页脚，不要隐藏 Header，否则按钮也会消失 */
+        #MainMenu, footer {{ visibility: hidden !important; }} 
+
+        /* 🔴 修改B：把 Header 变成透明且允许鼠标穿透 (这样才能点到下面的按钮) */
+        header {{ 
+            visibility: visible !important; /* 必须可见 */
+            background-color: transparent !important;
+            pointer-events: none !important; /* 让鼠标穿透 Header 空白处 */
+        }}
 
         .stApp {{ background-color: #000000; }}
         html, body, p, div, span, button, input, textarea, label, h1, h2, h3, h4, h5, h6 {{ 
@@ -46,38 +54,30 @@ def apply_pro_style():
         /* ============================
            3. 输入框 & 数字框 (去红修正)
            =========================== */
-        
-        /* 这里的逻辑是：聚焦(focus)时，强制把边框变灰，把默认的红色阴影去掉 */
-        
-        /* 1. 多行文本框 (TextArea) & 单行文本框 (TextInput) */
         .stTextArea textarea, .stTextInput input {{
             background-color: #0a0a0a !important;
             border: 1px solid #333 !important;
             color: #e0e0e0 !important;
-            caret-color: #fff !important; /* 光标颜色也改成白/灰 */
+            caret-color: #fff !important; 
         }}
         
-        /* 聚焦状态：浅灰色边框，无红色阴影 */
         .stTextArea textarea:focus, .stTextInput input:focus {{
-            border-color: #777 !important; /* 浅灰色 */
-            box-shadow: none !important;   /* 杀掉红光 */
+            border-color: #777 !important; 
+            box-shadow: none !important;   
             outline: none !important;
         }}
 
-        /* 2. 数字输入框 (Batch Size) */
         div[data-testid="stNumberInput"] div[data-baseweb="input"] {{
             background-color: #0a0a0a !important;
             border: 1px solid #333 !important;
             color: #e0e0e0 !important;
         }}
-        /* 数字框聚焦 */
         div[data-testid="stNumberInput"] div[data-baseweb="input"]:focus-within {{
-            border-color: #777 !important; /* 浅灰色 */
+            border-color: #777 !important; 
             box-shadow: none !important;
             caret-color: #fff !important;
         }}
 
-        /* 3. 下拉框聚焦 */
         div[data-baseweb="select"] > div:focus-within {{
             border-color: #777 !important;
             box-shadow: none !important;
@@ -99,7 +99,6 @@ def apply_pro_style():
             color: #fff !important;
         }}
         
-        /* 删除按钮特化 */
         div.stButton > button:contains("✕") {{
             border-color: #331111 !important;
             color: #663333 !important;
@@ -112,15 +111,35 @@ def apply_pro_style():
         }}
 
         /* ============================
-           5. 侧边栏修复
+           5. 侧边栏修复 (👉 修复点：这里改动了)
            =========================== */
         [data-testid="stSidebar"] {{ background-color: #0a0a0a !important; border-right: 1px solid #1a1a1a !important; }}
+        
+        /* 隐藏幽灵文字 */
         [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"] *, [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"] * {{ display: none !important; }}
+        
+        /* 🔴 修改C：按钮本身必须 pointer-events: auto，否则会被 Header 的穿透属性影响导致点不到 */
         [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"], [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"] {{
-            border: 1px solid #333 !important; background-color: #111 !important; border-radius: 4px !important;
-            width: 36px !important; height: 36px !important; display: flex !important; align-items: center !important; justify-content: center !important;
-            position: fixed !important; left: 1rem !important; top: 0.5rem !important; z-index: 999999 !important;
+            border: 1px solid #333 !important; 
+            background-color: #111 !important; 
+            border-radius: 4px !important;
+            width: 36px !important; 
+            height: 36px !important; 
+            display: flex !important; 
+            align-items: center !important; 
+            justify-content: center !important;
+            
+            /* 关键：恢复点击 */
+            pointer-events: auto !important; 
+            cursor: pointer !important;
+            
+            position: fixed !important; 
+            left: 1rem !important; 
+            top: 0.8rem !important; /*稍微往下挪一点点，视觉更舒服*/
+            z-index: 999999 !important;
         }}
+        
+        /* 箭头绘制 (保持不变) */
         [data-testid="stHeader"] button::after {{ content: "" !important; display: block !important; width: 8px !important; height: 8px !important; border-top: 2px solid #888 !important; border-right: 2px solid #888 !important; }}
         [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"]::after {{ transform: rotate(45deg); }}
         [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"]::after {{ transform: rotate(-135deg); }}
