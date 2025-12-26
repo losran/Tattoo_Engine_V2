@@ -162,4 +162,13 @@ with col_warehouse:
                         st.rerun()
 
     # 底部快速添加
-    c_add1, c_add2 = st.
+    c_add1, c_add2 = st.columns([3, 1])
+    with c_add1:
+        new_word_in = st.text_input("Add new item...", label_visibility="collapsed")
+    with c_add2:
+        if st.button("Add", use_container_width=True):
+            if new_word_in and new_word_in not in current_words:
+                current_words.append(new_word_in)
+                st.session_state.db_all[target_cat] = current_words
+                save_data(WAREHOUSE[target_cat], current_words)
+                st.rerun()
