@@ -143,7 +143,7 @@ with col_warehouse:
                     st.markdown(f"""
                     <div style="
                         background-color: #0e0e0e; 
-                        padding: 20px 4px; 
+                        padding: 8px 8px; 
                         border-radius: 4px; 
                         border: 1px solid #222; 
                         margin-bottom: 0px; 
