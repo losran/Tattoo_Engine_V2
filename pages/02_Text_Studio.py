@@ -11,7 +11,7 @@ if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
 import random
-# 导入核心模块 (无翻译模块)
+# 导入核心模块 (无翻译模块，确保 engine_manager 已回滚)
 from engine_manager import init_data, render_sidebar, fetch_image_refs_auto
 from style_manager import apply_pro_style
 
@@ -112,4 +112,5 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
         if "global_queue" not in st.session_state:
             st.session_state.global_queue = []
         st.session_state.global_queue.extend(st.session_state.text_solutions)
-        st.switch_page("pages/03_Automation.py") # 请确保你的文件名是 03_Automation.py 还是 03_🚀_Automation.py，这里写的是精简版
+        # 根据你的截图，文件名确实是 03_Automation.py，这里是正确的
+        st.switch_page("pages/03_Automation.py")
