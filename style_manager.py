@@ -8,7 +8,7 @@ def apply_pro_style():
         @import url('{font_url}');
 
         /* ============================
-           1. 布局修正 (👉 修复点：这里改动了)
+           1. 布局修正
            ============================ */
         .block-container {{
             padding-top: 4rem !important;
@@ -18,14 +18,13 @@ def apply_pro_style():
             max-width: 100% !important;
         }}
         
-        /* 🔴 修改A：只隐藏菜单和页脚，不要隐藏 Header，否则按钮也会消失 */
         #MainMenu, footer {{ visibility: hidden !important; }} 
 
-        /* 🔴 修改B：把 Header 变成透明且允许鼠标穿透 (这样才能点到下面的按钮) */
+        /* Header 透明且不阻挡鼠标，但保持可见以承载按钮 */
         header {{ 
-            visibility: visible !important; /* 必须可见 */
+            visibility: visible !important;
             background-color: transparent !important;
-            pointer-events: none !important; /* 让鼠标穿透 Header 空白处 */
+            pointer-events: none !important;
         }}
 
         .stApp {{ background-color: #000000; }}
@@ -35,7 +34,51 @@ def apply_pro_style():
         }}
 
         /* ============================
-           2. 下拉菜单纯黑化
+           2. 恢复官方原生侧边栏按钮 (Native Sidebar Toggle)
+           =========================== */
+        
+        /* 1. 选中侧边栏开关按钮 */
+        [data-testid="stSidebarCollapsedControl"], [data-testid="stSidebarExpandedControl"] {{
+            /* 关键：恢复点击 */
+            pointer-events: auto !important; 
+            cursor: pointer !important;
+            
+            /* 固定位置 (防止乱跑) */
+            position: fixed !important; 
+            left: 1rem !important; 
+            top: 0.8rem !important;
+            z-index: 999999 !important;
+            
+            /* 样式微调：适配黑背景 */
+            background-color: transparent !important; /* 透明背景 */
+            border: none !important; /* 去掉边框 */
+            color: #d0d0d0 !important; /* 图标颜色改为浅灰 */
+        }}
+        
+        /* 2. 鼠标悬停时给一点反应 */
+        [data-testid="stSidebarCollapsedControl"]:hover, [data-testid="stSidebarExpandedControl"]:hover {{
+            color: #fff !important;
+            background-color: rgba(255,255,255,0.1) !important; /* 微微发亮 */
+            border-radius: 4px !important;
+        }}
+
+        /* 3. 确保原生 SVG 图标显示出来 (之前被我隐藏了) */
+        [data-testid="stSidebarCollapsedControl"] svg, [data-testid="stSidebarExpandedControl"] svg {{
+            display: block !important;
+            width: 24px !important;
+            height: 24px !important;
+        }}
+        
+        /* 4. 删除所有伪元素 (删除之前画箭头的代码) */
+        [data-testid="stHeader"] button::after {{ content: none !important; }}
+
+        /* ============================
+           3. 侧边栏背景
+           =========================== */
+        [data-testid="stSidebar"] {{ background-color: #0a0a0a !important; border-right: 1px solid #1a1a1a !important; }}
+
+        /* ============================
+           4. 下拉菜单纯黑化
            ============================ */
         div[data-baseweb="select"] > div {{
             background-color: #0a0a0a !important;
@@ -52,7 +95,7 @@ def apply_pro_style():
         .stSelectbox label {{ display: none !important; }}
 
         /* ============================
-           3. 输入框 & 数字框 (去红修正)
+           5. 输入框 & 数字框 (纯黑+浅灰聚焦)
            =========================== */
         .stTextArea textarea, .stTextInput input {{
             background-color: #0a0a0a !important;
@@ -60,7 +103,6 @@ def apply_pro_style():
             color: #e0e0e0 !important;
             caret-color: #fff !important; 
         }}
-        
         .stTextArea textarea:focus, .stTextInput input:focus {{
             border-color: #777 !important; 
             box-shadow: none !important;   
@@ -77,14 +119,13 @@ def apply_pro_style():
             box-shadow: none !important;
             caret-color: #fff !important;
         }}
-
         div[data-baseweb="select"] > div:focus-within {{
             border-color: #777 !important;
             box-shadow: none !important;
         }}
 
         /* ============================
-           4. 工业风按钮
+           6. 工业风按钮
            =========================== */
         div.stButton > button {{
             background-color: #000000 !important;
@@ -109,40 +150,6 @@ def apply_pro_style():
             border-color: #ff4444 !important;
             color: #ff4444 !important;
         }}
-
-        /* ============================
-           5. 侧边栏修复 (👉 修复点：这里改动了)
-           =========================== */
-        [data-testid="stSidebar"] {{ background-color: #0a0a0a !important; border-right: 1px solid #1a1a1a !important; }}
-        
-        /* 隐藏幽灵文字 */
-        [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"] *, [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"] * {{ display: none !important; }}
-        
-        /* 🔴 修改C：按钮本身必须 pointer-events: auto，否则会被 Header 的穿透属性影响导致点不到 */
-        [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"], [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"] {{
-            border: 1px solid #333 !important; 
-            background-color: #111 !important; 
-            border-radius: 4px !important;
-            width: 36px !important; 
-            height: 36px !important; 
-            display: flex !important; 
-            align-items: center !important; 
-            justify-content: center !important;
-            
-            /* 关键：恢复点击 */
-            pointer-events: auto !important; 
-            cursor: pointer !important;
-            
-            position: fixed !important; 
-            left: 1rem !important; 
-            top: 0.8rem !important; /*稍微往下挪一点点，视觉更舒服*/
-            z-index: 999999 !important;
-        }}
-        
-        /* 箭头绘制 (保持不变) */
-        [data-testid="stHeader"] button::after {{ content: "" !important; display: block !important; width: 8px !important; height: 8px !important; border-top: 2px solid #888 !important; border-right: 2px solid #888 !important; }}
-        [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"]::after {{ transform: rotate(45deg); }}
-        [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"]::after {{ transform: rotate(-135deg); }}
 
     </style>
     """, unsafe_allow_html=True)
