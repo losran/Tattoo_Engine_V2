@@ -130,3 +130,39 @@ def render_sidebar():
                 st.rerun()
         else:
             st.warning("Connecting to Warehouse...")
+
+
+# ... (保留上面的 WAREHOUSE 和 Config 不变) ...
+
+@st.cache_data(ttl=600)
+def fetch_image_refs_auto():
+    """
+    全自动扫描 images 文件夹，获取所有图片的直链
+    不需要手动维护 ref_images.txt 了！
+    """
+    image_refs = {}
+    url = f"https://api.github.com/repos/{REPO}/contents/images"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    
+    try:
+        r = requests.get(url, headers=headers, timeout=5)
+        if r.status_code == 200:
+            files = r.json()
+            # 遍历返回的文件列表
+            for f in files:
+                fname = f["name"]
+                # 只认图片文件
+                if fname.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                    # 生成直链 (Raw URL)
+                    # 格式: https://raw.githubusercontent.com/用户名/仓库名/main/images/文件名
+                    # 注意: GitHub API 返回的 download_url 就是直链，直接用它最稳
+                    raw_url = f.get("download_url")
+                    if raw_url:
+                        # 用文件名当临时的 Key，虽然乱点但能用
+                        image_refs[fname] = raw_url
+        else:
+            print(f"扫描图片失败: {r.status_code}")
+    except Exception as e:
+        print(f"扫描出错: {e}")
+        
+    return image_refs
