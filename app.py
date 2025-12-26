@@ -122,7 +122,6 @@ with col_warehouse:
     with c1:
         st.markdown("#### Warehouse")
     with c2:
-        # 这里的下拉框现在是纯黑的了 (见 style_manager)
         target_cat = st.selectbox("Category", list(WAREHOUSE.keys()), label_visibility="collapsed")
     with c3:
         current_words = st.session_state.db_all.get(target_cat, [])
@@ -134,7 +133,7 @@ with col_warehouse:
             st.caption("No items.")
         else:
             for i, word in enumerate(current_words):
-                # 布局调整：给删除按钮留小一点的位置 (0.15)，因为右侧整体变窄了
+                # 布局调整：给删除按钮留小一点的位置 (0.15)
                 row_c1, row_c2 = st.columns([0.85, 0.15])
                 
                 with row_c1:
@@ -162,7 +161,9 @@ with col_warehouse:
                         st.rerun()
 
     # 底部快速添加
+    # 修复点：这里是报错的地方，确保这一行完整
     c_add1, c_add2 = st.columns([3, 1])
+    
     with c_add1:
         new_word_in = st.text_input("Add new item...", label_visibility="collapsed")
     with c_add2:
