@@ -1,9 +1,7 @@
 import streamlit as st
 from style_manager import apply_pro_style
-import streamlit.components.v1 as components
 import json
 import urllib.parse
-import re
 from engine_manager import render_sidebar
 
 # ===========================
@@ -17,7 +15,7 @@ st.markdown("## Automation Central")
 st.caption("Batch Processing Center")
 
 # ===========================
-# 2. 接收数据 (Global Queue)
+# 2. 接收数据
 # ===========================
 if "global_queue" not in st.session_state:
     st.session_state.global_queue = []
@@ -27,9 +25,8 @@ if st.session_state.global_queue:
     current_queue_text = "\n\n".join(st.session_state.global_queue)
 
 # ===========================
-# 3. 界面布局 (控制台风格)
+# 3. 界面布局
 # ===========================
-# 上半部分：控制栏
 c1, c2 = st.columns([2, 1])
 with c1:
     target_platform = st.selectbox(
@@ -42,23 +39,22 @@ with c1:
 with c2:
     st.markdown(f"<div style='text-align:right; line-height: 42px; color:#666;'>Pending Tasks: {len(st.session_state.global_queue)}</div>", unsafe_allow_html=True)
 
-# 下半部分：任务队列编辑器
+# 任务编辑器
 user_input = st.text_area(
     "Queue Editor", 
     value=current_queue_text, 
     height=300, 
-    placeholder="Waiting for tasks from Graphic Lab or Text Studio...",
+    placeholder="Waiting for tasks...",
     label_visibility="collapsed"
 )
 
-# 双向绑定更新
 if user_input != current_queue_text:
     st.session_state.global_queue = [t.strip() for t in user_input.split('\n\n') if t.strip()]
 
 st.divider()
 
 # ===========================
-# 4. 隐形生成逻辑 (No Code Display)
+# 4. 生成逻辑 (折叠胶囊版)
 # ===========================
 c_clear, c_gen = st.columns([1, 4])
 
@@ -68,26 +64,24 @@ with c_clear:
         st.rerun()
 
 with c_gen:
-    # 按钮文案简单直接
-    if st.button("⚡ Generate & Copy Script", type="primary", use_container_width=True):
+    if st.button("⚡ Generate Script", type="primary", use_container_width=True):
         # A. 智能清洗
         task_list = []
         if user_input:
             lines = user_input.split('\n\n')
             for line in lines:
                 clean = line.strip()
-                # 自动剪掉报错小尾巴
                 clean = clean.split("(Invalid")[0].strip()
                 clean = clean.split("(Connection")[0].strip()
                 clean = clean.split("(Offline")[0].strip()
                 if len(clean) > 2:
                     task_list.append(clean)
 
-        # B. 生成代码 (依然是那个强大的 V20 逻辑，只是不给你看了)
+        # B. 生成代码
         if task_list:
             encoded_data = urllib.parse.quote(json.dumps(task_list))
             
-            # JS 核心逻辑 (压缩版)
+            # JS 核心代码 (保持不变)
             js_code = f"""(async function() {{
                 console.clear();
                 console.log("%c 🚀 Automation Started ", "background: #000; color: #0f0; font-size: 14px");
@@ -180,23 +174,14 @@ with c_gen:
                 if(!window.kill) showStatus("🎉 All Done!", "#2e7d32");
             }})();"""
 
-            js_val = json.dumps(js_code)
+            st.success(f"✅ Ready! ({len(task_list)} Tasks)")
             
-            # C. 隐形执行复制 (高度为0的HTML组件)
-            components.html(f"""
-            <script>
-                const text = {js_val};
-                if (navigator.clipboard) {{
-                    navigator.clipboard.writeText(text)
-                        .then(() => console.log('Copied!'))
-                        .catch(err => console.log('Copy failed', err));
-                }}
-            </script>
-            """, height=0)
-
-            # D. 只显示简单的成功提示
-            st.success(f"✅ Script for {len(task_list)} tasks copied to clipboard!")
-            st.caption("Now open ChatGPT/Midjourney, press **F12** (Console), and paste (**Ctrl+V**).")
+            # C. 胶囊折叠：把代码藏起来，只露个头
+            # 用户点开后，右上角会有 Streamlit 原生的 Copy 按钮，那个是浏览器无法拦截的
+            with st.expander("📦 Get Script (Click here -> Copy Icon)", expanded=False):
+                st.code(js_code, language="javascript")
+            
+            st.caption("Tip: Open the box above, click the Copy icon on the top-right, then paste into ChatGPT Console (F12).")
             
         else:
             st.error("Queue is empty.")
