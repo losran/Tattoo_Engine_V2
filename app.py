@@ -1,84 +1,215 @@
 import streamlit as st
 import json
-from engine_manager import render_sidebar, WAREHOUSE, save_data, init_data
+import os
+from openai import OpenAI
+from engine_manager import render_sidebar, init_data, save_data
 from style_manager import apply_pro_style
 
 # ===========================
-# 1. 页面初始化
+# Configuration
 # ===========================
-st.set_page_config(layout="wide", page_title="Tattoo Engine V2")
-apply_pro_style()  # 加载你的黑色 Pro 皮肤
-render_sidebar()   # 加载侧边栏库存统计
+st.set_page_config(layout="wide", page_title="Tattoo Engine V2", page_icon="🧠")
+apply_pro_style()
+render_sidebar()
+
+# 尝试从 engine_manager 导入配置，如果失败则使用默认配置 (防崩设计)
+try:
+    from engine_manager import WAREHOUSE
+except ImportError:
+    # 默认仓库结构定义
+    WAREHOUSE = {
+        "Subject": "subjects.txt",
+        "StyleSystem": "styles.txt",
+        "Technique": "techniques.txt", 
+        "Mood": "moods.txt",
+        "Action": "actions.txt",
+        "Color": "colors.txt",
+        "Texture": "textures.txt",
+        "Composition": "compositions.txt",
+        "Usage": "usages.txt",
+        "Accent": "accents.txt",
+        "Text_English": "text_en.txt",
+        "Text_Spanish": "text_es.txt"
+    }
 
 # ===========================
-# 2. 标题区
+# Logic & Helpers
+# ===========================
+client = None
+if "DEEPSEEK_KEY" in st.secrets:
+    try:
+        client = OpenAI(
+            api_key=st.secrets["DEEPSEEK_KEY"],
+            base_url="https://api.deepseek.com"
+        )
+    except:
+        pass
+
+# Session State Init
+if "ai_results" not in st.session_state:
+    st.session_state.ai_results = []
+if "input_text" not in st.session_state:
+    st.session_state.input_text = ""
+if "db_all" not in st.session_state:
+    init_data()
+
+# ===========================
+# UI Layout
 # ===========================
 st.title("🧠 Tattoo Engine V2")
-st.caption("灵感采集 (Ingest) -> 资产沉淀 (Warehouse) -> 创意组装 (Studio)")
-st.markdown("---")
+st.caption("Smart Ingest (智能采集) → Warehouse (资产沉淀)")
+st.divider()
 
-# ===========================
-# 3. 灵感采集区 (Smart Ingest)
-# ===========================
-c1, c2 = st.columns([2, 1])
+center, right = st.columns([4, 2])
 
-with c1:
-    st.subheader("💡 快速入库 (Quick Add)")
-    # 这里我们做一个简单的添加器，直接往仓库里加词
-    
-    # 1. 选择要存入的仓库分类
-    target_cat = st.selectbox(
-        "存入哪里? (Select Category)", 
-        ["Subject", "Style", "Text_English", "Text_Spanish", "Mood"]
+# --- Left Column: Smart Ingest ---
+with center:
+    st.subheader("💡 Smart Ingest (智能拆解)")
+    st.session_state.input_text = st.text_area(
+        "输入灵感 (Inspiration Input)",
+        st.session_state.input_text,
+        height=220,
+        placeholder="在这里描述你的纹身想法，或者粘贴一堆混乱的关键词...\nAI 会自动识别并分类归档。"
     )
-    
-    # 2. 输入内容
-    new_val = st.text_input("输入新灵感 (Input new keyword)", placeholder="例如: Cyber Skull, Neon...")
-    
-    # 3. 提交按钮
-    if st.button("➕ 添加到仓库", type="primary"):
-        if new_val:
-            # 读取当前库存
-            init_data() # 确保数据已加载
-            current_list = st.session_state.db_all.get(target_cat, [])
-            
-            # 判重
-            if new_val in current_list:
-                st.warning(f"'{new_val}' 已经在库里了！")
-            else:
-                # 添加并保存
-                current_list.append(new_val)
-                st.session_state.db_all[target_cat] = current_list
-                
-                # 写入 GitHub
-                path = WAREHOUSE.get(target_cat)
-                if path:
-                    with st.spinner("正在同步到 GitHub..."):
-                        success = save_data(path, current_list)
-                        if success:
-                            st.success(f"已成功存入 [{target_cat}]: {new_val}")
-                        else:
-                            st.error("保存失败，请检查网络或 Token")
+
+    if st.button("⚡ 开始分析与拆解 (Start Analysis)", use_container_width=True):
+        if not st.session_state.input_text:
+            st.warning("输入不能为空")
+        elif not client:
+            st.error("DeepSeek Key 未配置")
         else:
-            st.warning("内容不能为空")
+            with st.spinner("DeepSeek 正在思考并拆解你的灵感..."):
+                prompt = f"""
+                任务：将纹身描述文本拆解为结构化关键词。
+                
+                【重要规则】
+                1. 请务必区分：
+                   - Subject (主体): 具体的物体、生物 (如: 猫, 骷髅, 玫瑰)
+                   - StyleSystem (风格): 艺术流派 (如: 赛博朋克, Old School, 水墨)
+                   - Mood (情绪): 氛围感受 (如: 压抑, 欢快, 神圣)
+                   - Action (动作): 动态 (如: 奔跑, 燃烧, 缠绕)
+                2. 不要把风格和情绪全塞进 Subject！
+                
+                【输出格式】
+                请直接返回纯 JSON 数据，不要包含 ```json 代码块标记。格式如下：
+                {{
+                    "Subject": ["词1", "词2"],
+                    "Action": ["词1"],
+                    "Mood": ["词1"],
+                    "StyleSystem": ["词1"],
+                    "Usage": ["词1"]
+                }}
+                
+                可用Key: {", ".join(WAREHOUSE.keys())}
 
-with c2:
-    st.info("👋 欢迎回来")
-    st.markdown("""
-    **工作流指引:**
-    1. 在左侧 **Menu** 切换工作室。
-    2. **Graphic Lab**: 做图形设计。
-    3. **Text Studio**: 做文字排版。
-    4. **Automation**: 拿脚本去跑图。
-    """)
+                输入文本：{st.session_state.input_text}
+                """
+                
+                try:
+                    res_obj = client.chat.completions.create(
+                        model="deepseek-chat",
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.1
+                    )
+                    res = res_obj.choices[0].message.content
+                    
+                    parsed = []
+                    
+                    # JSON Parsing Logic
+                    try:
+                        clean_json = res.replace("```json", "").replace("```", "").strip()
+                        data = json.loads(clean_json)
+                        
+                        for cat, words in data.items():
+                            target_key = None
+                            for k in WAREHOUSE:
+                                if k.lower() == cat.lower() or k.lower() in cat.lower():
+                                    target_key = k
+                                    break
+                            
+                            if target_key and isinstance(words, list):
+                                for w in words:
+                                    if w and isinstance(w, str):
+                                        parsed.append({"cat": target_key, "val": w.strip()})
+                                        
+                    except json.JSONDecodeError:
+                        st.warning("JSON 解析失败，切换到回退模式...")
+                        # 简单的兜底解析
+                        parsed.append({"cat": "Subject", "val": "解析失败请手动录入"})
 
-# ===========================
-# 4. 最近新增展示
-# ===========================
-st.markdown("---")
-st.caption("📦 仓库概览")
+                    st.session_state.ai_results = parsed
 
-if "db_all" in st.session_state:
-    # 展示几个核心库的标签云
-    st.markdown(f"**Subject (图形主体):** \n`{'` `'.join(st.session_state.db_all.get('Subject', [])[:10])}` ...")
-    st.markdown(f"**Text (英文词库):** \n`{'` `'.join(st.session_state.db_all.get('Text_English', [])[:10])}` ...")
+                except Exception as e:
+                    st.error(f"请求错误: {e}")
+
+    # Display Results
+    if st.session_state.ai_results:
+        st.success(f"成功提取 {len(st.session_state.ai_results)} 个关键词")
+        st.markdown("##### 确认入库 (Verify & Import)")
+        
+        selected = []
+        cols = st.columns(3)
+        for i, item in enumerate(st.session_state.ai_results):
+            with cols[i % 3]:
+                if st.checkbox(f'**{item["cat"]}** · {item["val"]}', key=f'chk_{i}', value=True):
+                    selected.append(item)
+        
+        st.write("")
+        if st.button("📥 确认存入仓库 (Confirm Import)", type="primary", use_container_width=True):
+            if "db_all" not in st.session_state:
+                init_data()
+            
+            changed_cats = set()
+            for item in selected:
+                cat, val = item["cat"], item["val"]
+                if cat not in st.session_state.db_all:
+                    st.session_state.db_all[cat] = []
+                    
+                current = st.session_state.db_all[cat]
+                if val not in current:
+                    current.append(val)
+                    st.session_state.db_all[cat] = current
+                    changed_cats.add(cat)
+            
+            if changed_cats:
+                with st.spinner("正在写入 GitHub 仓库..."):
+                    # 尝试调用 engine_manager 的保存，如果不存在则仅更新 Session
+                    try:
+                        for c in changed_cats: 
+                            save_data(WAREHOUSE[c], st.session_state.db_all[c])
+                        st.success("入库成功！")
+                    except Exception as e:
+                        st.warning(f"本地保存成功，但 GitHub 同步可能失败: {e}")
+                
+                import time
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.info("没有新的关键词需要入库。")
+
+# --- Right Column: Warehouse Manager ---
+with right:
+    st.subheader("📦 仓库管理")
+    cat = st.selectbox("选择分类 (Category)", list(WAREHOUSE.keys()))
+    
+    words = st.session_state.db_all.get(cat, [])
+
+    with st.container(height=500):
+        if not words:
+            st.caption("暂无数据 (No Data)")
+        for w in words:
+            c1, c2 = st.columns([4, 1]) 
+            with c1:
+                # 点击词条反哺到输入框
+                if st.button(w, key=f"add_{w}", use_container_width=True):
+                    st.session_state.input_text += f" {w}"
+            with c2:
+                # 删除词条
+                if st.button("✕", key=f"del_{cat}_{w}"):
+                    new_list = [i for i in words if i != w]
+                    st.session_state.db_all[cat] = new_list
+                    try:
+                        save_data(WAREHOUSE[cat], new_list)
+                    except:
+                        pass
+                    st.rerun()
