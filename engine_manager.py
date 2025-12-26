@@ -9,13 +9,13 @@ REPO = "losran/Tattoo_Engine_V2"
 BRANCH = "main"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# 映射表 (必须与你 GitHub 的实际文件名完全一致)
+# 映射表
 WAREHOUSE = {
-    # --- Graphic Core (图形核心) ---
+    # --- Graphic Core ---
     "Subject":       "data/graphic/subjects.txt",
     "Action":        "data/graphic/actions.txt",
     
-    # --- Style Matrix (风格矩阵) ---
+    # --- Style Matrix ---
     "StyleSystem":   "data/graphic/styles_system.txt",
     "Technique":     "data/graphic/styles_technique.txt",
     "Color":         "data/graphic/styles_color.txt",
@@ -23,11 +23,11 @@ WAREHOUSE = {
     "Composition":   "data/graphic/styles_composition.txt",
     "Accent":        "data/graphic/styles_accent.txt",
     
-    # --- Atmosphere (氛围) ---
+    # --- Atmosphere ---
     "Mood":          "data/common/moods.txt",
     "Usage":         "data/common/usage.txt",
     
-    # --- Text Asset (文字资产) ---
+    # --- Text Asset ---
     "Text_English":  "data/text/text_en.txt",
     "Text_Spanish":  "data/text/text_es.txt",
     "Font_Style":    "data/text/fonts.txt",
@@ -35,10 +35,10 @@ WAREHOUSE = {
 }
 
 # ==========================================
-# 2. 数据初始化 (Init)
+# 2. 数据初始化
 # ==========================================
 def fetch_repo_file(filepath):
-    """从 GitHub 读取文件内容"""
+    """读取文件内容"""
     url = f"https://raw.githubusercontent.com/{REPO}/{BRANCH}/{filepath}"
     try:
         r = requests.get(url, timeout=3)
@@ -50,7 +50,7 @@ def fetch_repo_file(filepath):
         return []
 
 def init_data():
-    """初始化所有数据到 Session State"""
+    """初始化数据"""
     if "db_all" not in st.session_state:
         st.session_state.db_all = {}
         
@@ -59,7 +59,7 @@ def init_data():
             st.session_state.db_all[key] = fetch_repo_file(path)
 
 # ==========================================
-# 3. 数据保存 (Write)
+# 3. 数据保存
 # ==========================================
 def save_data(file_key, new_list):
     logic_key = [k for k, v in WAREHOUSE.items() if v == file_key]
@@ -67,66 +67,47 @@ def save_data(file_key, new_list):
         st.session_state.db_all[logic_key[0]] = new_list
 
 # ==========================================
-# 4. 侧边栏 (Sidebar) - 全景仪表盘版 📊
+# 4. 侧边栏 (Sidebar) - 无符号纯净版
 # ==========================================
 def render_sidebar():
     with st.sidebar:
         # Logo
         st.logo("images/logo.png", icon_image="images/logo.png")
         
-        st.subheader("Engine Console")
+        st.subheader("Console")
         st.markdown("---")
         
-        # 库存监控 (全维度展示)
+        # 库存监控 (纯文本列表)
         if "db_all" in st.session_state:
             db = st.session_state.db_all
             
-            # 1. 核心 (Core)
-            c_sub = len(db.get("Subject", []))
-            c_act = len(db.get("Action", []))
+            # --- 分组 1: Graphic ---
+            st.markdown("**Graphic Core**")
+            c1, c2 = st.columns(2)
+            c1.markdown(f"Subject: {len(db.get('Subject', []))}")
+            c2.markdown(f"Action: {len(db.get('Action', []))}")
             
-            # 2. 风格细节 (Details)
-            c_sys  = len(db.get("StyleSystem", []))
-            c_tech = len(db.get("Technique", []))
-            c_col  = len(db.get("Color", []))
-            c_tex  = len(db.get("Texture", []))
-            c_comp = len(db.get("Composition", []))
-            c_acc  = len(db.get("Accent", []))
+            st.write("") # 空行间距
             
-            # 3. 氛围与文字 (Atmosphere & Text)
-            c_mood = len(db.get("Mood", []))
-            c_txt  = len(db.get("Text_English", []))
-            c_ref  = len(db.get("Ref_Images", []))
+            # --- 分组 2: Style ---
+            st.markdown("**Style Matrix**")
+            c3, c4 = st.columns(2)
+            with c3:
+                st.markdown(f"Sys: {len(db.get('StyleSystem', []))}")
+                st.markdown(f"Col: {len(db.get('Color', []))}")
+                st.markdown(f"Tex: {len(db.get('Texture', []))}")
+            with c4:
+                st.markdown(f"Tech: {len(db.get('Technique', []))}")
+                st.markdown(f"Comp: {len(db.get('Composition', []))}")
+                st.markdown(f"Acc: {len(db.get('Accent', []))}")
             
-            # === 渲染面板 ===
-            st.caption("📦 Warehouse Status")
+            st.write("") 
             
-            # 分组 1: 图形基础
-            with st.expander("🎨 Graphic Core", expanded=True):
-                st.markdown(f"Subject: **{c_sub}**")
-                st.markdown(f"Action: **{c_act}**")
-            
-            # 分组 2: 风格矩阵 (重点展示)
-            with st.expander("💅 Style Matrix", expanded=True):
-                # 使用紧凑的两列布局
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.markdown(f"Sys: **{c_sys}**")
-                    st.markdown(f"Col: **{c_col}**")
-                    st.markdown(f"Tex: **{c_tex}**")
-                with c2:
-                    st.markdown(f"Tech: **{c_tech}**")
-                    st.markdown(f"Comp: **{c_comp}**")
-                    st.markdown(f"Acc: **{c_acc}**")
-            
-            # 分组 3: 其他资产
-            with st.expander("🔤 Text & Mood", expanded=False):
-                st.markdown(f"Mood: **{c_mood}**")
-                st.markdown(f"Words (En): **{c_txt}**")
-                st.markdown(f"Ref Images: **{c_ref}**")
-        
-        st.markdown("---")
-        st.caption("✅ System Online")
+            # --- 分组 3: Others ---
+            st.markdown("**Assets**")
+            st.markdown(f"Mood: {len(db.get('Mood', []))}")
+            st.markdown(f"Words: {len(db.get('Text_English', []))}")
+            st.markdown(f"Refs: {len(db.get('Ref_Images', []))}")
 
 # ==========================================
 # 5. 图库扫描
