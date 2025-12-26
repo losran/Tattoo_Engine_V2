@@ -5,21 +5,21 @@ import requests
 # ==========================================
 # 1. 仓库配置 (精准映射你的目录结构)
 # ==========================================
-REPO = "losran/Tattoo_Engine_V2"  # 请确认这是你的仓库名
+REPO = "losran/Tattoo_Engine_V2"
 BRANCH = "main"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# ⚠️ 核心映射表：左边是代码逻辑用的名字，右边是实际文件路径
+# 映射表
 WAREHOUSE = {
     # --- Graphic (图形类) ---
     "Subject":       "data/graphic/subjects.txt",
-    "StyleSystem":   "data/graphic/styles_system.txt",      # 对应 styles_system.txt
-    "Technique":     "data/graphic/styles_technique.txt",   # 对应 styles_technique.txt
-    "Color":         "data/graphic/styles_color.txt",       # 对应 styles_color.txt
-    "Texture":       "data/graphic/styles_texture.txt",     # 对应 styles_texture.txt
-    "Composition":   "data/graphic/styles_composition.txt", # 对应 styles_composition.txt
-    "Accent":        "data/graphic/styles_accent.txt",      # 对应 styles_accent.txt
-    "Action":        "data/graphic/actions.txt",            # 对应 actions.txt
+    "StyleSystem":   "data/graphic/styles_system.txt",
+    "Technique":     "data/graphic/styles_technique.txt",
+    "Color":         "data/graphic/styles_color.txt",
+    "Texture":       "data/graphic/styles_texture.txt",
+    "Composition":   "data/graphic/styles_composition.txt",
+    "Accent":        "data/graphic/styles_accent.txt",
+    "Action":        "data/graphic/actions.txt",
     
     # --- Common (通用类) ---
     "Mood":          "data/common/moods.txt",
@@ -51,7 +51,6 @@ def init_data():
     if "db_all" not in st.session_state:
         st.session_state.db_all = {}
         
-    # 遍历上面的 WAREHOUSE 自动加载
     for key, path in WAREHOUSE.items():
         if key not in st.session_state.db_all:
             st.session_state.db_all[key] = fetch_repo_file(path)
@@ -59,29 +58,18 @@ def init_data():
 # ==========================================
 # 3. 数据保存 (Write)
 # ==========================================
-def update_repo_file(filepath, content_list):
-    """(高级功能) 写回 GitHub，需要完整 API 调用逻辑，此处简化为 Session 更新"""
-    # 实际生产环境这里需要调用 GitHub API 的 PUT 接口
-    # 为了保证演示稳定性，我们暂时只更新 Session 和 Cache
-    pass
-
 def save_data(file_key, new_list):
     """更新数据"""
-    # 1. 更新内存
-    # 反向查找 key 对应的逻辑名
     logic_key = [k for k, v in WAREHOUSE.items() if v == file_key]
     if logic_key:
         st.session_state.db_all[logic_key[0]] = new_list
-    
-    # 2. 这里的实际写回逻辑比较复杂，建议作为后续高级功能开发
-    # 目前先确保 Session 内可用
 
 # ==========================================
-# 4. 侧边栏 (Sidebar)
+# 4. 侧边栏 (Sidebar) - 核心修复位置 🛠️
 # ==========================================
 def render_sidebar():
     with st.sidebar:
-        # 显示 Logo (从 images 文件夹读取)
+        # 显示 Logo
         st.logo("images/logo.png", icon_image="images/logo.png")
         
         st.subheader("Engine V2 Console")
@@ -92,14 +80,20 @@ def render_sidebar():
             db = st.session_state.db_all
             c1, c2, c3 = st.columns(3)
             c1.metric("Graphic", len(db.get("Subject", [])))
-            c2.metric("Styles", len(db.get("StyleSystem", []))) # 监控核心风格
+            c2.metric("Styles", len(db.get("StyleSystem", [])))
             c3.metric("Refs", len(db.get("Ref_Images", [])))
         
         st.markdown("---")
+        
+        # 👇 修复后的刷新按钮逻辑
         if st.button("🔄 Refresh Data", use_container_width=True):
             st.cache_data.clear()
-            for key in st.session_state.db_all.keys():
+            
+            # 修复点：先把 keys 转成 list 列表再遍历，或者直接赋值空字典
+            keys_to_delete = list(st.session_state.db_all.keys()) 
+            for key in keys_to_delete:
                 del st.session_state.db_all[key]
+                
             init_data()
             st.rerun()
 
