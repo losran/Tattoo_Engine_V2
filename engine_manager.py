@@ -110,19 +110,28 @@ def render_sidebar():
 # ==========================================
 @st.cache_data(ttl=600)
 def fetch_image_refs_auto():
-    image_refs = {}
-    url = f"https://api.github.com/repos/{REPO}/contents/gallery"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    try:
-        r = requests.get(url, headers=headers, timeout=5)
-        if r.status_code == 200:
-            files = r.json()
-            for f in files:
-                fname = f["name"]
-                if fname.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
-                    raw_url = f.get("download_url")
-                    if raw_url:
-                        image_refs[fname] = raw_url
-    except:
-        pass
-    return image_refs
+    refs = {}
+    
+    # 1. 扫描本地 'images' 文件夹
+    local_img_dir = "images"
+    
+    if os.path.exists(local_img_dir):
+        try:
+            files = os.listdir(local_img_dir)
+            # 过滤图片后缀
+            valid_exts = ('.png', '.jpg', '.jpeg', '.webp')
+            
+            for file in files:
+                if file.lower().endswith(valid_exts):
+                    # 获取文件名作为选项名
+                    key_name = os.path.splitext(file)[0]
+                    # 将文件名存入，供 Prompt 生成
+                    refs[f"📂 {key_name}"] = file 
+        except Exception as e:
+            print(f"Error: {e}")
+            
+    # 2. 如果文件夹是空的，给两个保底链接，防止列表报错
+    if not refs:
+        refs["Old School"] = "https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Sailor_Jerry_Flash.jpg/640px-Sailor_Jerry_Flash.jpg"
+        
+    return refs
