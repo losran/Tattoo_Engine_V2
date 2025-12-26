@@ -62,15 +62,15 @@ with c2:
     qty = st.number_input("Batch Size", 1, 8, 4)
 
 # ===========================
-# 4. 执行逻辑 (修复抖动)
+# 4. 执行逻辑
 # ===========================
 if st.button("Generate", type="primary", use_container_width=True):
     
-    st.session_state.final_solutions = [] 
+    st.session_state.graphic_solutions = [] # 改名：graphic专用，互不干扰
     placeholders = []   
     skeletons = []      
     
-    # --- 第一阶段：秒出骨架 (UI 统一化) ---
+    # --- 第一阶段：秒出骨架 ---
     for i in range(qty):
         idx = i + 1
         ph = st.empty()
@@ -79,8 +79,6 @@ if st.button("Generate", type="primary", use_container_width=True):
         sk = assemble_skeleton(user_in)
         skeletons.append(sk)
         
-        # 🟢 修复点：不再用 HTML div，而是直接用原生 container
-        # 这样它的边框和内边距就和下面“生成中”的状态完全一致了
         with ph.container(border=True):
             st.markdown(f"**Option {idx}:** {sk}")
             st.caption("✨ AI is thinking...") 
@@ -102,10 +100,7 @@ if st.button("Generate", type="primary", use_container_width=True):
         full_response = ""
         
         try:
-            # 清空原来的
             ph.empty()
-            
-            # 🟢 保持一致：继续使用 container(border=True)
             with ph.container(border=True):
                 if client:
                     stream = client.chat.completions.create(
@@ -118,7 +113,6 @@ if st.button("Generate", type="primary", use_container_width=True):
                     if not full_response.startswith("**"):
                         full_response = f"**Option {idx}:** {full_response}"
                 else:
-                    # 无 Key 模拟
                     dummy = f"**Option {idx}:** {sk} (Offline Mode)"
                     def dummy_stream():
                         for w in dummy.split(" "):
@@ -127,43 +121,49 @@ if st.button("Generate", type="primary", use_container_width=True):
                     full_response = st.write_stream(dummy_stream)
 
         except Exception as e:
-            # 报错时的显示
             ph.empty()
             with ph.container(border=True):
                 err_msg = str(e)
                 note = "Connection Error"
                 if "401" in err_msg: note = "Invalid API Key"
-                
-                # 红色警告文字
                 st.markdown(f"**Option {idx}:** {sk}")
                 st.markdown(f":red[⚠️ {note} - Using Raw Data]")
-                
                 full_response = f"**Option {idx}:** {sk} ({note})"
 
         final_results.append(full_response)
 
-    st.session_state.final_solutions = final_results
+    st.session_state.graphic_solutions = final_results
     st.rerun()
 
 # ===========================
-# 5. 结果展示
+# 5. 结果展示与叠加发送
 # ===========================
-if "final_solutions" in st.session_state and st.session_state.final_solutions:
+if "graphic_solutions" in st.session_state and st.session_state.graphic_solutions:
     st.markdown("---")
     st.subheader("Final Output")
     
-    for sol in st.session_state.final_solutions:
-        # 🟢 最终展示也用原生 container，彻底统一视觉
+    for sol in st.session_state.graphic_solutions:
         with st.container(border=True):
             st.markdown(sol)
         
     c_send, c_clear = st.columns([3, 1])
     
     with c_send:
-        if st.button("Send to Automation", type="primary", use_container_width=True):
+        # 🟢 核心修改：叠加逻辑 🟢
+        if st.button("Add to Automation Queue (叠加发送)", type="primary", use_container_width=True):
+            # 1. 初始化全局购物车
+            if "global_queue" not in st.session_state:
+                st.session_state.global_queue = []
+            
+            # 2. 将当前生成的方案“追加”进去，而不是覆盖
+            st.session_state.global_queue.extend(st.session_state.graphic_solutions)
+            
+            # 3. 跳转
+            st.toast(f"已添加 {len(st.session_state.graphic_solutions)} 个方案到队列！")
+            time.sleep(0.5)
             st.switch_page("pages/03_🚀_Automation.py")
             
     with c_clear:
         if st.button("Clear Results", use_container_width=True):
-            st.session_state.final_solutions = []
+            st.session_state.graphic_solutions = []
             st.rerun()
