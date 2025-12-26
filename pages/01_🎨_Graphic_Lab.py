@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+import time
 from openai import OpenAI
 from engine_manager import init_data, render_sidebar
 from style_manager import apply_pro_style
@@ -20,103 +21,39 @@ if "DEEPSEEK_KEY" in st.secrets:
         pass
 
 # ===========================
-# 2. 核心逻辑：精密组装
+# 2. 核心组件
 # ===========================
 def smart_pick(category):
-    """从仓库的安全抽取函数"""
     db = st.session_state.get("db_all", {})
     items = db.get(category, [])
-    if items:
-        return random.choice(items)
+    if items: return random.choice(items)
     return ""
 
-def assemble_complex_logic(user_input):
-    """
-    精密组装逻辑链条
-    Subject -> System -> Tech -> Color -> Texture -> Comp -> Action -> Mood -> (Accent)
-    """
-    # 1. 确定主体
+def assemble_skeleton(user_input):
+    """秒级组装骨架 (CPU 本地运算)"""
     subject = user_input if user_input.strip() else smart_pick("Subject")
     
-    # 2. 抽取配方
-    s_system = smart_pick("StyleSystem")
-    s_tech   = smart_pick("Technique")
-    s_color  = smart_pick("Color")
-    s_tex    = smart_pick("Texture")
-    s_comp   = smart_pick("Composition")
-    action   = smart_pick("Action")
-    mood     = smart_pick("Mood")
+    parts = [
+        subject,
+        f"{smart_pick('StyleSystem')} style",
+        f"{smart_pick('Technique')} technique",
+        f"{smart_pick('Color')} palette",
+        f"{smart_pick('Texture')} texture",
+        f"{smart_pick('Composition')} composition",
+        smart_pick('Action'),
+        f"{smart_pick('Mood')} vibe"
+    ]
     
-    # 3. 组装链条
-    parts = [subject]
-    if s_system: parts.append(f"{s_system} style")
-    if s_tech:   parts.append(f"{s_tech} technique")
-    if s_color:  parts.append(f"{s_color} palette")
-    if s_tex:    parts.append(f"{s_tex} texture")
-    if s_comp:   parts.append(f"{s_comp} composition")
-    if action:   parts.append(action)
-    if mood:     parts.append(f"{mood} vibe")
-    
-    # 4. 随机点缀 (40% 概率)
     if random.random() > 0.6:
-        accent = smart_pick("Accent")
-        if accent: parts.append(f"with {accent} details")
+        parts.append(f"with {smart_pick('Accent')} details")
         
-    return ", ".join(parts)
-
-def run_pipeline(user_input, count):
-    results = []
-    sys_prompt = "You are a tattoo art director. Refine the keywords into a high-quality Midjourney prompt."
-    
-    for i in range(count):
-        idx = i + 1
-        
-        # A. 组装骨架 (本地逻辑，永远可用)
-        skeleton = assemble_complex_logic(user_input)
-        
-        # B. AI 润色 (带容错降级)
-        user_prompt = f"""
-        Raw Keywords: {skeleton}
-        Task: Write a descriptive Midjourney prompt (40-60 words).
-        Start EXACTLY with "**Option {idx}:**".
-        """
-        
-        try:
-            if client:
-                resp = client.chat.completions.create(
-                    model="deepseek-chat",
-                    messages=[
-                        {"role": "system", "content": sys_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=0.9
-                )
-                content = resp.choices[0].message.content.strip()
-                # 强制格式修正
-                prefix = f"**方案{idx}："  # 保持中文前缀以便 Automation 识别
-                if not content.startswith("**"):
-                    content = f"{prefix} {content}"
-                results.append(content)
-            else:
-                # 无 Key 降级
-                results.append(f"**方案{idx}：** {skeleton} (Offline Mode)")
-                
-        except Exception as e:
-            # 异常降级 (保留骨架)
-            err_msg = str(e)
-            note = "Connection Error"
-            if "401" in err_msg: note = "Invalid API Key"
-            elif "402" in err_msg: note = "Insufficient Balance"
-            
-            results.append(f"**方案{idx}：** {skeleton} ({note} - Raw Data Used)")
-            
-    return results
+    return ", ".join([p for p in parts if p and " style" not in p[:1]]) # 简单清洗空值
 
 # ===========================
-# 3. 界面交互 (无表情符号版)
+# 3. 界面交互
 # ===========================
 st.title("Graphic Lab")
-st.caption("Precision Assembly & AI Polish")
+st.caption("Instant Skeleton -> Real-time AI Polish")
 
 c1, c2 = st.columns([3, 1])
 with c1:
@@ -124,21 +61,117 @@ with c1:
 with c2:
     qty = st.number_input("Batch Size", 1, 8, 4)
 
+# ===========================
+# 4. 执行逻辑 (核心修改区)
+# ===========================
 if st.button("Generate", type="primary", use_container_width=True):
-    with st.spinner("Processing..."):
-        res = run_pipeline(user_in, qty)
-        st.session_state.final_solutions = res
-        st.rerun()
+    
+    # --- 第一阶段：秒出骨架 (Instant) ---
+    st.session_state.final_solutions = [] # 清空旧数据
+    placeholders = []   # 用于存放 UI 占位符
+    skeletons = []      # 用于存放原始数据
+    
+    # 1. 瞬间生成所有框框和骨架
+    for i in range(qty):
+        idx = i + 1
+        # 创建一个带有边框的容器
+        with st.container(border=True):
+            # 创建一个空的占位符，用来变魔术
+            ph = st.empty()
+            placeholders.append(ph)
+            
+            # 立即生成骨架
+            sk = assemble_skeleton(user_in)
+            skeletons.append(sk)
+            
+            # ⚡️ 立即显示骨架 + 思考状态
+            # 这里用灰色字体显示，表示是“生肉”
+            ph.markdown(f"""
+            **Option {idx}:** `{sk}`  
+            \n
+            *✨ AI is polishing...*
+            """)
+    
+    # --- 第二阶段：逐个流式润色 (Streaming) ---
+    sys_prompt = "You are a tattoo art director. Refine the keywords into a high-quality Midjourney prompt."
+    
+    final_results = []
+
+    for i, sk in enumerate(skeletons):
+        idx = i + 1
+        ph = placeholders[i] # 找到对应的那个框
+        
+        user_prompt = f"""
+        Raw Keywords: {sk}
+        Task: Write a descriptive Midjourney prompt (40-60 words).
+        Start EXACTLY with "**Option {idx}:**".
+        """
+        
+        full_response = ""
+        
+        try:
+            if client:
+                # 🌊 开启流式传输 (Stream=True)
+                stream = client.chat.completions.create(
+                    model="deepseek-chat",
+                    messages=[
+                        {"role": "system", "content": sys_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.9,
+                    stream=True  # <--- 关键！
+                )
+                
+                # 🎬 逐字打印效果 (覆盖掉原来的骨架)
+                full_response = st.write_stream(stream)
+                
+                # 如果 AI 没按格式返回，手动补前缀
+                if not full_response.startswith("**"):
+                    # 因为 write_stream 已经写到屏幕上了，这里修正内存里的数据即可
+                    full_response = f"**Option {idx}:** {full_response}"
+
+            else:
+                # 无 Key 模式：模拟打字机效果
+                dummy_text = f"**Option {idx}:** {sk} (Offline Mode)"
+                
+                def dummy_stream():
+                    for word in dummy_text.split(" "):
+                        yield word + " "
+                        time.sleep(0.05)
+                
+                full_response = st.write_stream(dummy_stream)
+
+        except Exception as e:
+            # 报错时的回退
+            err_msg = str(e)
+            note = "Connection Error"
+            if "401" in err_msg: note = "Invalid API Key"
+            
+            final_text = f"**Option {idx}:** {sk} \n\n*({note} - Raw Data)*"
+            ph.info(final_text) # 用静态显示替换流式
+            full_response = final_text
+
+        # 存入列表，为了后面发给 Automation
+        final_results.append(full_response)
+
+    # 存入 Session，防止刷新丢失
+    st.session_state.final_solutions = final_results
+    st.rerun() # 重新运行一次以显示底部的按钮 (Streamlit 机制限制)
 
 # ===========================
-# 4. 结果展示
+# 5. 结果处理区 (从 Session 读取)
 # ===========================
 if "final_solutions" in st.session_state and st.session_state.final_solutions:
-    st.markdown("---")
-    st.subheader("Generated Options")
+    # 如果不是刚点击生成（即页面刷新后），需要重新把结果画出来
+    # 因为刚才的 write_stream 是暂时的
     
-    for s in st.session_state.final_solutions:
-        st.info(s)
+    # 只有当按钮没被按下的时候才重绘，避免重复
+    # 这里我们简单一点：每次 Rerun 后直接显示静态结果
+    st.markdown("---")
+    st.subheader("Final Output")
+    
+    for sol in st.session_state.final_solutions:
+        st.info(sol)
         
     c_send, c_clear = st.columns([3, 1])
     
@@ -147,6 +180,6 @@ if "final_solutions" in st.session_state and st.session_state.final_solutions:
             st.switch_page("pages/03_🚀_Automation.py")
             
     with c_clear:
-        if st.button("Clear Results", use_container_width=True):
+        if st.button("Clear", use_container_width=True):
             st.session_state.final_solutions = []
             st.rerun()
