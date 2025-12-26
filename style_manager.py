@@ -11,16 +11,14 @@ def apply_pro_style():
            1. 布局修正
            ============================ */
         .block-container {{
-            padding-top: 4rem !important;
+            padding-top: 3.5rem !important;
             padding-bottom: 2rem !important;
-            padding-left: 2rem !important;
-            padding-right: 2rem !important;
             max-width: 100% !important;
         }}
         
         #MainMenu, footer {{ visibility: hidden !important; }} 
 
-        /* Header 透明且不阻挡鼠标，但保持可见以承载按钮 */
+        /* Header 透明且不阻挡鼠标 */
         header {{ 
             visibility: visible !important;
             background-color: transparent !important;
@@ -28,13 +26,15 @@ def apply_pro_style():
         }}
 
         .stApp {{ background-color: #000000; }}
+        
+        /* 全局字体强制为 Poppins */
         html, body, p, div, span, button, input, textarea, label, h1, h2, h3, h4, h5, h6 {{ 
             font-family: 'Poppins', 'Noto Sans SC', sans-serif !important;
             color: #d0d0d0; 
         }}
 
         /* ============================
-           2. 恢复官方原生侧边栏按钮 (Native Sidebar Toggle)
+           2. 侧边栏按钮 (局部字体回滚)
            =========================== */
         
         /* 1. 选中侧边栏开关按钮 */
@@ -43,34 +43,33 @@ def apply_pro_style():
             pointer-events: auto !important; 
             cursor: pointer !important;
             
-            /* 固定位置 (防止乱跑) */
+            /* 固定位置 */
             position: fixed !important; 
             left: 1rem !important; 
             top: 0.8rem !important;
             z-index: 999999 !important;
             
-            /* 样式微调：适配黑背景 */
-            background-color: transparent !important; /* 透明背景 */
-            border: none !important; /* 去掉边框 */
-            color: #d0d0d0 !important; /* 图标颜色改为浅灰 */
+            /* 外观适配黑背景 */
+            background-color: transparent !important;
+            border: none !important;
+            color: #999 !important; /* 默认浅灰 */
+            
+            /* 🔥 核心修复：局部恢复图标字体 🔥 */
+            /* 告诉浏览器：这个按钮里的字，不是英文，是图标！ */
+            font-family: "Material Symbols Rounded", "Material Icons", sans-serif !important;
         }}
         
-        /* 2. 鼠标悬停时给一点反应 */
-        [data-testid="stSidebarCollapsedControl"]:hover, [data-testid="stSidebarExpandedControl"]:hover {{
-            color: #fff !important;
-            background-color: rgba(255,255,255,0.1) !important; /* 微微发亮 */
-            border-radius: 4px !important;
+        /* 2. 确保按钮内部的所有元素也继承这个图标字体 */
+        [data-testid="stSidebarCollapsedControl"] *, [data-testid="stSidebarExpandedControl"] * {{
+            font-family: "Material Symbols Rounded", "Material Icons", sans-serif !important;
         }}
 
-        /* 3. 确保原生 SVG 图标显示出来 (之前被我隐藏了) */
-        [data-testid="stSidebarCollapsedControl"] svg, [data-testid="stSidebarExpandedControl"] svg {{
-            display: block !important;
-            width: 24px !important;
-            height: 24px !important;
+        /* 3. 鼠标悬停效果 */
+        [data-testid="stSidebarCollapsedControl"]:hover, [data-testid="stSidebarExpandedControl"]:hover {{
+            color: #fff !important; /* 悬停变白 */
+            background-color: rgba(255,255,255,0.1) !important;
+            border-radius: 4px !important;
         }}
-        
-        /* 4. 删除所有伪元素 (删除之前画箭头的代码) */
-        [data-testid="stHeader"] button::after {{ content: none !important; }}
 
         /* ============================
            3. 侧边栏背景
@@ -78,77 +77,65 @@ def apply_pro_style():
         [data-testid="stSidebar"] {{ background-color: #0a0a0a !important; border-right: 1px solid #1a1a1a !important; }}
 
         /* ============================
-           4. 下拉菜单纯黑化
-           ============================ */
+           4. 核心对齐锁死 (42px)
+           =========================== */
+        [data-testid="column"] {{ display: flex !important; align-items: flex-end !important; }}
+        div[data-testid="stNumberInput"] div[data-baseweb="input"],
+        div[data-testid="stButton"] button,
+        .stTextInput input, 
         div[data-baseweb="select"] > div {{
-            background-color: #0a0a0a !important;
-            border-color: #333 !important;
-            color: #eee !important;
+            height: 42px !important; min-height: 42px !important; box-sizing: border-box !important;
         }}
-        ul[data-testid="stSelectboxVirtualDropdown"] {{
-            background-color: #0a0a0a !important;
-            border: 1px solid #333 !important;
-        }}
-        li[role="option"] {{ color: #ccc !important; }}
-        li[role="option"]:hover {{ background-color: #1a1a1a !important; }}
-        li[aria-selected="true"] {{ background-color: #222 !important; color: #fff !important; }}
-        .stSelectbox label {{ display: none !important; }}
+        div[data-testid="stNumberInput"] label {{ display: none !important; }}
+        div[data-testid="stNumberInput"] input {{ height: 42px !important; }}
+        div[data-testid="stButton"] button p {{ line-height: 42px !important; margin: 0 !important; }}
 
         /* ============================
-           5. 输入框 & 数字框 (纯黑+浅灰聚焦)
+           5. 纯黑配色 (Inputs)
            =========================== */
-        .stTextArea textarea, .stTextInput input {{
-            background-color: #0a0a0a !important;
-            border: 1px solid #333 !important;
-            color: #e0e0e0 !important;
-            caret-color: #fff !important; 
+        .stTextArea textarea, .stTextInput input, div[data-testid="stNumberInput"] div[data-baseweb="input"] {{
+            background-color: #0a0a0a !important; border: 1px solid #333 !important; color: #e0e0e0 !important;
         }}
-        .stTextArea textarea:focus, .stTextInput input:focus {{
-            border-color: #777 !important; 
-            box-shadow: none !important;   
-            outline: none !important;
+        div[data-baseweb="select"] > div, ul[data-testid="stSelectboxVirtualDropdown"] {{
+            background-color: #0a0a0a !important; border-color: #333 !important; color: #eee !important;
         }}
-
-        div[data-testid="stNumberInput"] div[data-baseweb="input"] {{
-            background-color: #0a0a0a !important;
-            border: 1px solid #333 !important;
-            color: #e0e0e0 !important;
-        }}
-        div[data-testid="stNumberInput"] div[data-baseweb="input"]:focus-within {{
-            border-color: #777 !important; 
-            box-shadow: none !important;
-            caret-color: #fff !important;
-        }}
-        div[data-baseweb="select"] > div:focus-within {{
-            border-color: #777 !important;
-            box-shadow: none !important;
+        li[role="option"]:hover {{ background-color: #1a1a1a !important; }}
+        li[aria-selected="true"] {{ background-color: #222 !important; color: #fff !important; }}
+        
+        .stTextArea textarea:focus, .stTextInput input:focus, div[data-baseweb="select"] > div:focus-within, div[data-testid="stNumberInput"] div[data-baseweb="input"]:focus-within {{
+            border-color: #777 !important; box-shadow: none !important; outline: none !important;
         }}
 
         /* ============================
            6. 工业风按钮
            =========================== */
         div.stButton > button {{
-            background-color: #000000 !important;
-            color: #ccc !important;
-            border: 1px solid #333 !important;
-            border-radius: 4px !important;
-            transition: all 0.2s;
+            background-color: #000000 !important; color: #ccc !important; border: 1px solid #333 !important; border-radius: 4px !important; transition: all 0.2s;
         }}
         div.stButton > button:hover {{
-            background-color: #1a1a1a !important;
-            border-color: #888 !important;
-            color: #fff !important;
+            background-color: #1a1a1a !important; border-color: #fff !important; color: #fff !important;
         }}
-        
+        div.stButton > button[kind="primary"] {{
+            background-color: #000000 !important; border-color: #555 !important; color: #fff !important;
+        }}
         div.stButton > button:contains("✕") {{
-            border-color: #331111 !important;
-            color: #663333 !important;
-            line-height: 1 !important;
+            border-color: #331111 !important; color: #663333 !important; line-height: 1 !important;
         }}
         div.stButton > button:contains("✕"):hover {{
-            background-color: #330000 !important;
-            border-color: #ff4444 !important;
-            color: #ff4444 !important;
+            background-color: #330000 !important; border-color: #ff4444 !important; color: #ff4444 !important;
+        }}
+
+        /* ============================
+           7. 响应式适配
+           =========================== */
+        @media (max-width: 1024px) {{
+            [data-testid="stHorizontalBlock"] {{ flex-wrap: wrap !important; gap: 10px !important; }}
+            [data-testid="column"] {{ flex: 1 1 auto !important; min-width: 120px !important; }}
+        }}
+        @media (max-width: 768px) {{
+            [data-testid="stHorizontalBlock"] {{ flex-direction: column !important; }}
+            [data-testid="column"], div[data-testid="stNumberInput"], div[data-testid="stButton"] {{ width: 100% !important; max-width: 100% !important; }}
+            div[data-testid="stButton"] {{ margin-top: 5px !important; }}
         }}
 
     </style>
