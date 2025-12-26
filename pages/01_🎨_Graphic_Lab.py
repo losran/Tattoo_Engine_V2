@@ -53,7 +53,6 @@ def assemble_skeleton(user_input):
 # 3. 界面交互
 # ===========================
 st.title("Graphic Lab")
-st.caption("Precision Assembly & AI Polish")
 
 c1, c2 = st.columns([3, 1])
 with c1:
