@@ -1,135 +1,193 @@
 import streamlit as st
 import json
+import pandas as pd
 from openai import OpenAI
-from engine_manager import render_sidebar, init_data, WAREHOUSE
+from engine_manager import render_sidebar, WAREHOUSE, save_data, init_data
 from style_manager import apply_pro_style
 
 # ===========================
-# 1. 页面配置
+# 1. 基础配置
 # ===========================
-st.set_page_config(layout="wide", page_title="Tattoo Engine V2", page_icon="🧠")
+st.set_page_config(layout="wide", page_title="Tattoo Engine V2")
 apply_pro_style()
 render_sidebar()
-init_data()
 
-# 初始化 DeepSeek
+# 初始化数据
+if "db_all" not in st.session_state:
+    init_data()
+
+# 初始化 AI
 client = None
-try:
-    client = OpenAI(api_key=st.secrets["DEEPSEEK_KEY"], base_url="https://api.deepseek.com")
-except:
-    pass
+if "DEEPSEEK_KEY" in st.secrets:
+    try:
+        client = OpenAI(
+            api_key=st.secrets["DEEPSEEK_KEY"],
+            base_url="https://api.deepseek.com"
+        )
+    except:
+        pass
 
-# 状态初始化
+# Session 初始化
 if "ai_results" not in st.session_state: st.session_state.ai_results = []
 if "input_text" not in st.session_state: st.session_state.input_text = ""
 
 # ===========================
-# 2. 界面布局
+# 2. 界面布局 (去 Emoji 极简风)
 # ===========================
-st.title("🧠 Tattoo Engine V2")
-st.caption("Smart Ingest (智能采集) → Warehouse (资产沉淀)")
+st.title("Tattoo Engine V2")
+st.caption("Smart Ingest & Asset Management")
 st.divider()
 
-col_ingest, col_warehouse = st.columns([4, 2])
+col_ingest, col_warehouse = st.columns([2, 1])
 
-# --- 左侧：智能采集 (Smart Ingest) ---
+# ===========================
+# 3. 左侧：智能入库 (Smart Ingest)
+# ===========================
 with col_ingest:
-    st.subheader("💡 灵感入库 (Smart Ingest)")
+    st.subheader("Smart Ingest")
+    
     st.session_state.input_text = st.text_area(
-        "灵感输入",
+        "Raw Input",
         st.session_state.input_text,
-        height=200,
-        placeholder="在此输入任何混乱的灵感...\n例如：想做一个赛博朋克风格的艺伎，带一点故障艺术的纹理，构图要对称，黑红配色..."
+        height=180,
+        placeholder="Paste your messy inspiration or keywords here..."
     )
 
-    if st.button("⚡ 深度拆解 (Analyze)", use_container_width=True):
-        if not client:
-            st.error("DeepSeek Key 未配置")
-        elif not st.session_state.input_text:
-            st.warning("请输入内容")
+    # 按钮区
+    c1, c2 = st.columns([1, 4])
+    with c1:
+        analyze_btn = st.button("Analyze", type="primary", use_container_width=True)
+    
+    # --- AI 分析逻辑 ---
+    if analyze_btn:
+        if not st.session_state.input_text:
+            st.warning("Input is empty")
+        elif not client:
+            st.error("DeepSeek Key missing")
         else:
-            with st.spinner("正在进行结构化拆解..."):
-                # 能够识别所有细分维度的 Prompt
-                keys_str = ", ".join(WAREHOUSE.keys())
+            with st.spinner("Processing..."):
                 prompt = f"""
-                任务：将纹身描述拆解为结构化数据。
-                目标库分类：{keys_str}
+                Task: Extract keywords from tattoo description into JSON.
+                Categories: {", ".join(WAREHOUSE.keys())}
                 
-                【规则】
-                1. StyleSystem (风格流派) 和 Technique (技法) 要区分开。
-                2. Accent (点缀) 是指具体的装饰元素（如：光晕、火花）。
-                3. Composition (构图) 指形态（如：对称、黄金螺旋）。
+                Rules:
+                1. Distinguish StyleSystem (Art genre) vs Technique (Drawing method).
+                2. Return JSON ONLY. No markdown.
                 
-                【输出JSON】
+                Format:
                 {{
-                    "Subject": ["词1"],
-                    "StyleSystem": ["词1"],
-                    "Technique": ["词1"],
-                    "Mood": ["词1"],
-                    ...
+                    "Subject": ["item1"],
+                    "StyleSystem": ["style1"],
+                    "Technique": ["tech1"],
+                    "Mood": ["mood1"]
                 }}
-                输入：{st.session_state.input_text}
-                """
                 
+                Input: {st.session_state.input_text}
+                """
                 try:
-                    resp = client.chat.completions.create(
+                    res = client.chat.completions.create(
                         model="deepseek-chat",
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.1
-                    )
-                    raw_json = resp.choices[0].message.content.replace("```json", "").replace("```", "").strip()
-                    data = json.loads(raw_json)
+                    ).choices[0].message.content
+                    
+                    # 强力清洗 JSON
+                    clean_json = res.replace("```json", "").replace("```", "").strip()
+                    data = json.loads(clean_json)
                     
                     parsed = []
-                    for cat, items in data.items():
-                        # 模糊匹配逻辑
+                    for cat, words in data.items():
+                        # 模糊匹配 Key
                         target_key = None
-                        for warehouse_key in WAREHOUSE.keys():
-                            if warehouse_key.lower() == cat.lower():
-                                target_key = warehouse_key
+                        for k in WAREHOUSE:
+                            if k.lower() == cat.lower(): 
+                                target_key = k
                                 break
                         
-                        if target_key and isinstance(items, list):
-                            for item in items:
-                                parsed.append({"cat": target_key, "val": item})
+                        if target_key and isinstance(words, list):
+                            for w in words:
+                                parsed.append({"Category": target_key, "Keyword": w})
                                 
                     st.session_state.ai_results = parsed
+                    
                 except Exception as e:
-                    st.error(f"解析失败: {e}")
+                    st.error(f"Analysis failed: {e}")
 
-    # 结果确认区
+    # --- 结果确认区 (表格化展示) ---
     if st.session_state.ai_results:
-        st.success(f"识别出 {len(st.session_state.ai_results)} 个有效资产")
+        st.write("")
+        st.subheader("Results Preview")
         
-        # 预览卡片
-        selected_items = []
-        c1, c2, c3 = st.columns(3)
-        for i, item in enumerate(st.session_state.ai_results):
-            with [c1, c2, c3][i % 3]:
-                if st.checkbox(f"**{item['cat']}**: {item['val']}", value=True, key=f"check_{i}"):
-                    selected_items.append(item)
+        # 转换为 DataFrame 展示，更整齐
+        df_preview = pd.DataFrame(st.session_state.ai_results)
+        st.dataframe(df_preview, use_container_width=True, hide_index=True)
         
-        st.markdown("---")
-        if st.button("📥 确认存入仓库", type="primary"):
-            # 写入 Session (实际项目会写入 GitHub)
+        if st.button("Confirm Import", type="primary"):
+            changed_cats = set()
             count = 0
-            for item in selected_items:
-                cat, val = item['cat'], item['val']
-                if cat in st.session_state.db_all:
-                    if val not in st.session_state.db_all[cat]:
-                        st.session_state.db_all[cat].append(val)
-                        count += 1
-            st.success(f"成功入库 {count} 个新词条！")
-            st.rerun()
+            for item in st.session_state.ai_results:
+                cat, val = item["Category"], item["Keyword"]
+                current_list = st.session_state.db_all.get(cat, [])
+                if val not in current_list:
+                    current_list.append(val)
+                    st.session_state.db_all[cat] = current_list
+                    changed_cats.add(cat)
+                    count += 1
+            
+            # 保存逻辑
+            if changed_cats:
+                for c in changed_cats:
+                    save_data(WAREHOUSE[c], st.session_state.db_all[c])
+                st.success(f"Imported {count} new keywords.")
+                st.session_state.ai_results = [] # 清空结果
+                st.rerun()
+            else:
+                st.info("No new unique keywords found.")
 
-# --- 右侧：仓库概览 ---
+# ===========================
+# 4. 右侧：仓库管理 (修复删除功能)
+# ===========================
 with col_warehouse:
-    st.subheader("📦 资产管理")
-    view_cat = st.selectbox("查看分类", list(WAREHOUSE.keys()))
+    st.subheader("Warehouse")
     
-    items = st.session_state.db_all.get(view_cat, [])
-    st.caption(f"当前库存: {len(items)}")
+    # 1. 选择分类
+    target_cat = st.selectbox("Category", list(WAREHOUSE.keys()))
     
-    with st.container(height=400):
-        for item in items:
-            st.text(f"• {item}")
+    # 获取当前数据
+    current_words = st.session_state.db_all.get(target_cat, [])
+    
+    # 2. 展示数据 (使用容器 + DataFrame，干净整洁)
+    with st.container(border=True):
+        if current_words:
+            # 简单展示列表
+            st.markdown(f"**Total Items:** {len(current_words)}")
+            st.dataframe(
+                pd.DataFrame(current_words, columns=["Keywords"]), 
+                use_container_width=True, 
+                hide_index=True,
+                height=300
+            )
+        else:
+            st.caption("No data in this category.")
+
+    # 3. 删除功能 (改为多选删除，解决按钮卡死问题)
+    with st.expander("Manage / Delete", expanded=False):
+        if current_words:
+            to_delete = st.multiselect(
+                "Select items to delete:", 
+                options=current_words,
+                placeholder="Choose keywords..."
+            )
+            
+            if to_delete:
+                if st.button("Delete Selected", type="secondary", use_container_width=True):
+                    # 执行删除
+                    new_list = [w for w in current_words if w not in to_delete]
+                    st.session_state.db_all[target_cat] = new_list
+                    
+                    # 保存
+                    save_data(WAREHOUSE[target_cat], new_list)
+                    st.success("Deleted.")
+                    st.rerun()
+        else:
+            st.caption("Nothing to delete.")
