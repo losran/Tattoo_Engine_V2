@@ -1,115 +1,95 @@
 import streamlit as st
 
 def apply_pro_style():
-    # 字体加载
+    # 保持字体加载
     font_url = "https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Poppins:wght@400;500;600&display=swap"
     
     st.markdown(f"""
     <style>
         @import url('{font_url}');
 
-        /* ===========================
-           1. 全局字体与配色
-           =========================== */
+        /* 1. 全局字体基础 */
         html, body, [class*="css"], font, span, div, h1, h2, h3, h4, h5, h6, p, a, button, input, textarea, label {{
             font-family: 'Poppins', 'Noto Sans SC', sans-serif !important;
             color: #d0d0d0;
         }}
-        .stApp {{ background-color: #000000; }}
 
-        /* ===========================
-           2. 侧边栏 (Sidebar)
-           =========================== */
-        [data-testid="stSidebar"] {{ 
-            background-color: #0a0a0a !important; 
-            border-right: 1px solid #1a1a1a !important; 
-        }}
-        [data-testid="stSidebarUserContent"] {{ padding-top: 2rem !important; }}
+        /* 2. 侧边栏布局与防遮挡 */
+        [data-testid="stSidebar"] {{ background-color: #0a0a0a !important; border-right: 1px solid #1a1a1a !important; z-index: 99998 !important; }}
+        [data-testid="stSidebarUserContent"] {{ padding-top: 3.5rem !important; }}
+        [data-testid="stLogo"] {{ height: auto !important; z-index: 99999 !important; }}
 
-        /* ===========================
-           3. 关键修复：顶部导航栏 (Header) 🚑
-           =========================== */
+        /* =======================================================
+           🔥🔥🔥 定向清除鬼魂文字 (keyboard_...) 🔥🔥🔥
+           ======================================================= */
         
-        /* A. 不要隐藏 Header 本身，而是让它变透明 & 允许鼠标穿透 */
-        header[data-testid="stHeader"] {{
-            background: transparent !important;
-            border-bottom: none !important;
-            pointer-events: none !important; /* 让点击穿透空白区域，不挡下面内容 */
-            height: 3rem !important;
+        /* 核心修复：直接抹除按钮内部的所有原生内容 */
+        [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"] *,
+        [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"] * {{
+            display: none !important;      /* 抹除所有内部标签 */
+            font-size: 0 !important;       /* 强制字号归零 */
+            color: transparent !important; /* 强制透明 */
+            width: 0 !important;
+            height: 0 !important;
         }}
 
-        /* B. 只隐藏 Header 里的杂项 (右侧菜单、彩条、运行状态) */
-        [data-testid="stDecoration"], 
-        [data-testid="stStatusWidget"],
-        [data-testid="stToolbar"] {{
-            display: none !important;
-        }}
-
-        /* C. 复活“展开/收起”按钮！并赋予它实体 */
-        header[data-testid="stHeader"] button[data-testid*="stSidebar"] {{
-            pointer-events: auto !important; /* 恢复按钮可点击 */
-            display: flex !important;
-            visibility: visible !important;
-            opacity: 1 !important;
+        /* 3. 按钮容器本身 (作为画板) */
+        [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"],
+        [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"] {{
             border: 1px solid #333 !important;
             background-color: #111 !important;
-            width: 42px !important;
-            height: 42px !important;
-            border-radius: 8px !important;
+            border-radius: 4px !important;
+            width: 36px !important;
+            height: 36px !important;
             position: relative !important;
-            z-index: 999999 !important; /* 确保浮在最上层 */
-            margin-top: 4px !important;
+            z-index: 100000 !important;
+            margin-top: 0px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }}
 
-        /* ===========================
-           4. 按钮美化 (画箭头)
-           =========================== */
+        /* =======================================================
+           4. 纯 CSS 几何绘制箭头 (伪元素不受 display:none 影响)
+           ======================================================= */
         
-        /* 隐藏原生图标 */
-        header[data-testid="stHeader"] button[data-testid*="stSidebar"] svg {{
-            display: none !important;
-        }}
-        
-        /* 用 CSS 画一个干净的箭头 */
-        header[data-testid="stHeader"] button[data-testid*="stSidebar"]::after {{
+        /* 箭头骨架 */
+        [data-testid="stHeader"] button::after {{
             content: "" !important;
             display: block !important;
-            width: 10px !important;
-            height: 10px !important;
-            border-right: 2px solid #888 !important;
-            border-top: 2px solid #888 !important;
-            transition: transform 0.2s;
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            width: 8px !important;
+            height: 8px !important;
+            border-top: 2px solid #888 !important;   /* 上边框 */
+            border-right: 2px solid #888 !important; /* 右边框 */
+            transition: all 0.2s ease !important;
         }}
 
-        /* 收起时：箭头向右 (提示展开) */
-        header[data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"]::after {{
-            transform: rotate(45deg);
-            margin-left: -3px;
+        /* 收起状态：右箭头 > (旋转45度) */
+        [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"]::after {{
+            transform: translate(-65%, -50%) rotate(45deg) !important; 
         }}
+
+        /* 展开状态：左箭头 < (旋转-135度) */
+        [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"]::after {{
+            transform: translate(-35%, -50%) rotate(-135deg) !important;
+        }}
+
+        /* Hover 反馈 */
+        [data-testid="stHeader"] button:hover {{ border-color: #fff !important; background-color: #222 !important; }}
+        [data-testid="stHeader"] button:hover::after {{ border-color: #fff !important; }}
+
+        /* 其他去噪处理 */
+        [data-testid="stToolbarActions"], [data-testid="stStatusWidget"], [data-testid="stDecoration"] {{ display: none !important; }}
+        header[data-testid="stHeader"] {{ background-color: rgba(0,0,0,0.6) !important; border-bottom: 1px solid #1a1a1a !important; height: 3.5rem !important; }}
         
-        /* 展开时：箭头向左 (提示收起) */
-        header[data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"]::after {{
-            transform: rotate(-135deg);
-            margin-left: 2px;
-        }}
-
-        /* 悬停高亮 */
-        header[data-testid="stHeader"] button[data-testid*="stSidebar"]:hover {{
-            border-color: #fff !important;
-            background-color: #222 !important;
-        }}
-        header[data-testid="stHeader"] button[data-testid*="stSidebar"]:hover::after {{
-            border-color: #fff !important;
-        }}
-
-        /* ===========================
-           5. 其他组件样式
-           =========================== */
-        .stButton > button {{ border: 1px solid #333 !important; background: #111 !important; color: #888 !important; }}
-        .stButton > button[kind="primary"] {{ background: #e1e1e1 !important; color: #000 !important; }}
-        .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {{ 
-            background-color: #111 !important; border: 1px solid #333 !important; color: #fff !important; 
-        }}
-
+        /* 通用组件样式 */
+        :root {{ --primary-color: #C0C0C0 !important; }}
+        .stApp {{ background-color: #000000; }}
+        .stButton > button {{ border: 1px solid #333 !important; background: #111 !important; color: #888 !important; border-radius: 6px !important; }}
+        .stButton > button:hover {{ border-color: #FFFFFF !important; color: #FFFFFF !important; }}
+        .stTextArea textarea, .stTextInput input {{ background-color: #111111 !important; border: 1px solid #333333 !important; color: #e0e0e0 !important; }}
     </style>
     """, unsafe_allow_html=True)
