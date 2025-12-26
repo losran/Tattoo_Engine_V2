@@ -27,49 +27,65 @@ def apply_pro_style():
         }}
 
         /* ============================
-           2. 下拉菜单纯黑化 (修正版)
+           2. 下拉菜单纯黑化
            ============================ */
-        /* 下拉框静态显示框 */
         div[data-baseweb="select"] > div {{
             background-color: #0a0a0a !important;
             border-color: #333 !important;
             color: #eee !important;
         }}
-        
-        /* 🔥 弹出的下拉列表 (Popover) 🔥 */
         ul[data-testid="stSelectboxVirtualDropdown"] {{
             background-color: #0a0a0a !important;
             border: 1px solid #333 !important;
         }}
-        
-        /* 选项样式 */
-        li[role="option"] {{
-            color: #ccc !important;
-        }}
-        li[role="option"]:hover {{
-            background-color: #1a1a1a !important;
-        }}
-        li[aria-selected="true"] {{
-            background-color: #222 !important;
-            color: #fff !important;
-        }}
-        
-        /* 隐藏 Selectbox 的 Label */
+        li[role="option"] {{ color: #ccc !important; }}
+        li[role="option"]:hover {{ background-color: #1a1a1a !important; }}
+        li[aria-selected="true"] {{ background-color: #222 !important; color: #fff !important; }}
         .stSelectbox label {{ display: none !important; }}
 
         /* ============================
-           3. 输入框 & 按钮
+           3. 输入框 & 数字框 (去红修正)
            =========================== */
+        
+        /* 这里的逻辑是：聚焦(focus)时，强制把边框变灰，把默认的红色阴影去掉 */
+        
+        /* 1. 多行文本框 (TextArea) & 单行文本框 (TextInput) */
         .stTextArea textarea, .stTextInput input {{
             background-color: #0a0a0a !important;
             border: 1px solid #333 !important;
             color: #e0e0e0 !important;
+            caret-color: #fff !important; /* 光标颜色也改成白/灰 */
         }}
-        .stTextArea textarea:focus, .stTextInput input:focus, div[data-baseweb="select"] > div:focus-within {{
-            border-color: #666 !important;
+        
+        /* 聚焦状态：浅灰色边框，无红色阴影 */
+        .stTextArea textarea:focus, .stTextInput input:focus {{
+            border-color: #777 !important; /* 浅灰色 */
+            box-shadow: none !important;   /* 杀掉红光 */
+            outline: none !important;
+        }}
+
+        /* 2. 数字输入框 (Batch Size) */
+        div[data-testid="stNumberInput"] div[data-baseweb="input"] {{
+            background-color: #0a0a0a !important;
+            border: 1px solid #333 !important;
+            color: #e0e0e0 !important;
+        }}
+        /* 数字框聚焦 */
+        div[data-testid="stNumberInput"] div[data-baseweb="input"]:focus-within {{
+            border-color: #777 !important; /* 浅灰色 */
+            box-shadow: none !important;
+            caret-color: #fff !important;
+        }}
+
+        /* 3. 下拉框聚焦 */
+        div[data-baseweb="select"] > div:focus-within {{
+            border-color: #777 !important;
             box-shadow: none !important;
         }}
 
+        /* ============================
+           4. 工业风按钮
+           =========================== */
         div.stButton > button {{
             background-color: #000000 !important;
             color: #ccc !important;
@@ -87,7 +103,7 @@ def apply_pro_style():
         div.stButton > button:contains("✕") {{
             border-color: #331111 !important;
             color: #663333 !important;
-            line-height: 1 !important; /* 修正X的位置 */
+            line-height: 1 !important;
         }}
         div.stButton > button:contains("✕"):hover {{
             background-color: #330000 !important;
@@ -96,7 +112,7 @@ def apply_pro_style():
         }}
 
         /* ============================
-           4. 侧边栏修复
+           5. 侧边栏修复
            =========================== */
         [data-testid="stSidebar"] {{ background-color: #0a0a0a !important; border-right: 1px solid #1a1a1a !important; }}
         [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"] *, [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"] * {{ display: none !important; }}
