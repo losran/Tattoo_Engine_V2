@@ -147,7 +147,7 @@ with col_warehouse:
                         border-radius: 4px; 
                         border: 1px solid #222; 
                         margin-bottom: 0px; 
-                        font-size: 20px;
+                        font-size: 16px;
                         white-space: nowrap; 
                         overflow: hidden; 
                         text-overflow: ellipsis;
