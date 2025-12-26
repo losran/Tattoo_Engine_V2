@@ -13,10 +13,11 @@ render_sidebar()
 init_data()
 
 client = None
-try:
-    client = OpenAI(api_key=st.secrets["DEEPSEEK_KEY"], base_url="https://api.deepseek.com")
-except:
-    pass
+if "DEEPSEEK_KEY" in st.secrets:
+    try:
+        client = OpenAI(api_key=st.secrets["DEEPSEEK_KEY"], base_url="https://api.deepseek.com")
+    except:
+        pass
 
 # ===========================
 # 2. 核心逻辑：精密组装
@@ -31,18 +32,18 @@ def smart_pick(category):
 
 def assemble_complex_logic(user_input):
     """
-    【核心】复刻原版的高级组装逻辑
-    链条：主体 -> 风格体系 -> 技法 -> 颜色 -> 纹理 -> 构图 -> 动作 -> 情绪 -> (点缀)
+    精密组装逻辑链条
+    Subject -> System -> Tech -> Color -> Texture -> Comp -> Action -> Mood -> (Accent)
     """
-    # 1. 确定主体 (Subject)
+    # 1. 确定主体
     subject = user_input if user_input.strip() else smart_pick("Subject")
     
-    # 2. 抽取配方 (从细分文件里抽)
-    s_system = smart_pick("StyleSystem")   # 对应 styles_system.txt
-    s_tech   = smart_pick("Technique")     # 对应 styles_technique.txt
-    s_color  = smart_pick("Color")         # 对应 styles_color.txt
-    s_tex    = smart_pick("Texture")       # 对应 styles_texture.txt
-    s_comp   = smart_pick("Composition")   # 对应 styles_composition.txt
+    # 2. 抽取配方
+    s_system = smart_pick("StyleSystem")
+    s_tech   = smart_pick("Technique")
+    s_color  = smart_pick("Color")
+    s_tex    = smart_pick("Texture")
+    s_comp   = smart_pick("Composition")
     action   = smart_pick("Action")
     mood     = smart_pick("Mood")
     
@@ -56,7 +57,7 @@ def assemble_complex_logic(user_input):
     if action:   parts.append(action)
     if mood:     parts.append(f"{mood} vibe")
     
-    # 4. 随机点缀 (Accent) - 40% 概率触发
+    # 4. 随机点缀 (40% 概率)
     if random.random() > 0.6:
         accent = smart_pick("Accent")
         if accent: parts.append(f"with {accent} details")
@@ -65,22 +66,19 @@ def assemble_complex_logic(user_input):
 
 def run_pipeline(user_input, count):
     results = []
-    # 系统提示词：强调艺术性和 Prompt 格式
     sys_prompt = "You are a tattoo art director. Refine the keywords into a high-quality Midjourney prompt."
     
     for i in range(count):
         idx = i + 1
-        # A. 组装骨架
+        
+        # A. 组装骨架 (本地逻辑，永远可用)
         skeleton = assemble_complex_logic(user_input)
         
-        # B. AI 润色
+        # B. AI 润色 (带容错降级)
         user_prompt = f"""
         Raw Keywords: {skeleton}
-        
-        Task: 
-        1. Write a descriptive Midjourney prompt (40-60 words).
-        2. Keep all specific style/technique keywords.
-        3. Start EXACTLY with "**方案{idx}：**".
+        Task: Write a descriptive Midjourney prompt (40-60 words).
+        Start EXACTLY with "**Option {idx}:**".
         """
         
         try:
@@ -94,30 +92,40 @@ def run_pipeline(user_input, count):
                     temperature=0.9
                 )
                 content = resp.choices[0].message.content.strip()
-                if not content.startswith(f"**方案{idx}"):
-                    content = f"**方案{idx}：** {content}"
+                # 强制格式修正
+                prefix = f"**方案{idx}："  # 保持中文前缀以便 Automation 识别
+                if not content.startswith("**"):
+                    content = f"{prefix} {content}"
                 results.append(content)
             else:
-                results.append(f"**方案{idx}：** {skeleton} (AI未连接，仅骨架)")
+                # 无 Key 降级
+                results.append(f"**方案{idx}：** {skeleton} (Offline Mode)")
+                
         except Exception as e:
-            results.append(f"**方案{idx}：** 生成出错 {e}")
+            # 异常降级 (保留骨架)
+            err_msg = str(e)
+            note = "Connection Error"
+            if "401" in err_msg: note = "Invalid API Key"
+            elif "402" in err_msg: note = "Insufficient Balance"
+            
+            results.append(f"**方案{idx}：** {skeleton} ({note} - Raw Data Used)")
             
     return results
 
 # ===========================
-# 3. 界面交互
+# 3. 界面交互 (无表情符号版)
 # ===========================
-st.title("🎨 Graphic Lab")
-st.caption("Precision Assembly (精密组装) -> AI Polish")
+st.title("Graphic Lab")
+st.caption("Precision Assembly & AI Polish")
 
 c1, c2 = st.columns([3, 1])
 with c1:
-    user_in = st.text_input("核心主体 (Core Subject)", placeholder="留空则开启全盲盒模式...")
+    user_in = st.text_input("Core Subject", placeholder="Leave empty for Blind Box mode...")
 with c2:
-    qty = st.number_input("数量", 1, 8, 4)
+    qty = st.number_input("Batch Size", 1, 8, 4)
 
-if st.button("✨ 启动精密引擎 (Generate)", type="primary", use_container_width=True):
-    with st.spinner("正在调用复杂逻辑链条..."):
+if st.button("Generate", type="primary", use_container_width=True):
+    with st.spinner("Processing..."):
         res = run_pipeline(user_in, qty)
         st.session_state.final_solutions = res
         st.rerun()
@@ -127,8 +135,18 @@ if st.button("✨ 启动精密引擎 (Generate)", type="primary", use_container_
 # ===========================
 if "final_solutions" in st.session_state and st.session_state.final_solutions:
     st.markdown("---")
+    st.subheader("Generated Options")
+    
     for s in st.session_state.final_solutions:
         st.info(s)
         
-    if st.button("🚀 发送至自动化中心", use_container_width=True):
-        st.switch_page("pages/03_🚀_Automation.py")
+    c_send, c_clear = st.columns([3, 1])
+    
+    with c_send:
+        if st.button("Send to Automation", type="primary", use_container_width=True):
+            st.switch_page("pages/03_🚀_Automation.py")
+            
+    with c_clear:
+        if st.button("Clear Results", use_container_width=True):
+            st.session_state.final_solutions = []
+            st.rerun()
