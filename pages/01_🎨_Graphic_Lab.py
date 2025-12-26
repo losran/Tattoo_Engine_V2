@@ -49,28 +49,11 @@ def assemble_skeleton(user_input):
         
     return ", ".join([p for p in parts if p and " style" not in p[:1]])
 
-def render_dark_card(content):
-    """渲染深灰色卡片 (替代 st.info)"""
-    # 使用 Streamlit 的背景色微调，做出卡片感
-    st.markdown(f"""
-    <div style="
-        background-color: #000000; 
-        padding: 15px; 
-        border-radius: 8px; 
-        border: 1px solid #3d3d3d; 
-        margin-bottom: 10px;
-        color: #e0e0e0;
-        font-family: sans-serif;
-    ">
-        {content}
-    </div>
-    """, unsafe_allow_html=True)
-
 # ===========================
 # 3. 界面交互
 # ===========================
 st.title("Graphic Lab")
-st.caption("Instant Skeleton -> Real-time AI Polish")
+st.caption("Precision Assembly & AI Polish")
 
 c1, c2 = st.columns([3, 1])
 with c1:
@@ -79,7 +62,7 @@ with c2:
     qty = st.number_input("Batch Size", 1, 8, 4)
 
 # ===========================
-# 4. 执行逻辑
+# 4. 执行逻辑 (修复抖动)
 # ===========================
 if st.button("Generate", type="primary", use_container_width=True):
     
@@ -87,24 +70,20 @@ if st.button("Generate", type="primary", use_container_width=True):
     placeholders = []   
     skeletons = []      
     
-    # --- 第一阶段：秒出骨架 ---
+    # --- 第一阶段：秒出骨架 (UI 统一化) ---
     for i in range(qty):
         idx = i + 1
-        # 使用 st.empty 占位
         ph = st.empty()
         placeholders.append(ph)
         
         sk = assemble_skeleton(user_in)
         skeletons.append(sk)
         
-        # 初始状态：显示骨架 (用 Markdown 模拟深色块)
-        with ph.container():
-            st.markdown(f"""
-            <div style="background-color: #1e1e1e; padding: 15px; border-radius: 8px; border: 1px dashed #444; color: #888;">
-                <strong>Option {idx}:</strong> {sk} <br><br>
-                <span style="color: #4caf50;">✨ AI is thinking...</span>
-            </div>
-            """, unsafe_allow_html=True)
+        # 🟢 修复点：不再用 HTML div，而是直接用原生 container
+        # 这样它的边框和内边距就和下面“生成中”的状态完全一致了
+        with ph.container(border=True):
+            st.markdown(f"**Option {idx}:** {sk}")
+            st.caption("✨ AI is thinking...") 
     
     # --- 第二阶段：流式润色 ---
     sys_prompt = "You are a tattoo art director. Refine the keywords into a high-quality Midjourney prompt."
@@ -123,12 +102,10 @@ if st.button("Generate", type="primary", use_container_width=True):
         full_response = ""
         
         try:
-            # 清空占位符，准备开始流式输出
+            # 清空原来的
             ph.empty()
             
-            # 创建一个深色容器来承载流式文字
-            # 注意：st.write_stream 很难直接嵌在 HTML div 里，
-            # 所以这里我们用 st.container(border=True) 自带的深灰背景
+            # 🟢 保持一致：继续使用 container(border=True)
             with ph.container(border=True):
                 if client:
                     stream = client.chat.completions.create(
@@ -150,18 +127,17 @@ if st.button("Generate", type="primary", use_container_width=True):
                     full_response = st.write_stream(dummy_stream)
 
         except Exception as e:
-            # 报错时的显示 (使用深灰卡片)
+            # 报错时的显示
             ph.empty()
-            with ph.container():
+            with ph.container(border=True):
                 err_msg = str(e)
                 note = "Connection Error"
-                if "401" in err_msg: note = "Invalid API Key (Check Secrets)"
+                if "401" in err_msg: note = "Invalid API Key"
                 
-                final_text = f"**Option {idx}:** {sk} <br><br> <span style='color:#ff6b6b; font-size:0.9em;'>⚠️ {note} - Using Raw Data</span>"
+                # 红色警告文字
+                st.markdown(f"**Option {idx}:** {sk}")
+                st.markdown(f":red[⚠️ {note} - Using Raw Data]")
                 
-                render_dark_card(final_text) # 调用深灰卡片函数
-                
-                # 存纯文本给自动化用
                 full_response = f"**Option {idx}:** {sk} ({note})"
 
         final_results.append(full_response)
@@ -170,15 +146,16 @@ if st.button("Generate", type="primary", use_container_width=True):
     st.rerun()
 
 # ===========================
-# 5. 结果展示 (静态)
+# 5. 结果展示
 # ===========================
 if "final_solutions" in st.session_state and st.session_state.final_solutions:
     st.markdown("---")
     st.subheader("Final Output")
     
     for sol in st.session_state.final_solutions:
-        # 这里把 st.info 换成了自定义的深灰卡片
-        render_dark_card(sol)
+        # 🟢 最终展示也用原生 container，彻底统一视觉
+        with st.container(border=True):
+            st.markdown(sol)
         
     c_send, c_clear = st.columns([3, 1])
     
