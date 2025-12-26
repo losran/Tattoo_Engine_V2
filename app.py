@@ -29,27 +29,29 @@ if "ai_results" not in st.session_state: st.session_state.ai_results = []
 if "input_text" not in st.session_state: st.session_state.input_text = ""
 
 # ===========================
-# 2. 标题区 (手动写标题，防止被CSS隐藏)
+# 2. 标题区 (现在应该能看见了)
 # ===========================
 st.markdown("## Tattoo Engine V2") 
 st.markdown("---")
 
 # ===========================
-# 3. 左右分栏 (1:2)
+# 3. 左右分栏 (左窄右宽)
 # ===========================
-col_ingest, col_warehouse = st.columns([1, 2])
+# 调整比例让右边更宽敞，显得不那么挤
+col_ingest, col_warehouse = st.columns([1, 2.5])
 
 # ===========================
 # 4. 左侧：智能入库
 # ===========================
 with col_ingest:
     st.markdown("#### Smart Ingest")
+    st.caption("AI Parser")
     
     st.session_state.input_text = st.text_area(
         "Raw Input",
         st.session_state.input_text,
         height=100, 
-        placeholder="Paste inspiration keywords...",
+        placeholder="Paste text here...",
         label_visibility="collapsed"
     )
 
@@ -88,7 +90,6 @@ with col_ingest:
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-    # 结果预览表格
     if st.session_state.ai_results:
         st.write("")
         st.caption("Preview")
@@ -113,57 +114,56 @@ with col_ingest:
                 st.rerun()
 
 # ===========================
-# 5. 右侧：清单式仓库 (List View)
+# 5. 右侧：紧凑型清单 (Super Tight)
 # ===========================
 with col_warehouse:
     # 头部工具栏
-    c1, c2, c3 = st.columns([3, 2, 2])
+    c1, c2, c3 = st.columns([2, 2, 2])
     with c1:
         st.markdown("#### Warehouse")
     with c2:
+        # 下拉框现在是纯黑色的了
         target_cat = st.selectbox("Category", list(WAREHOUSE.keys()), label_visibility="collapsed")
     with c3:
-        # 统计数字
         current_words = st.session_state.db_all.get(target_cat, [])
-        st.markdown(f"<div style='text-align:right; line-height: 2.5em; color:#666;'>Count: {len(current_words)}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:right; padding-top: 5px; color:#666; font-size: 0.9em;'>{len(current_words)} Items</div>", unsafe_allow_html=True)
 
-    # 🔴 核心变化：自适应列表视图 (Scrollable Container)
-    # 给容器一个固定高度，形成滚动条，不再无限拉长页面
-    with st.container(height=650, border=True):
+    # 列表容器 (高度拉高到 700px)
+    with st.container(height=700, border=True):
         if not current_words:
-            st.caption("No items in this category.")
+            st.caption("No items.")
         else:
-            # 遍历渲染每一行
-            # enumerate 拿到索引，防止 key 冲突
             for i, word in enumerate(current_words):
-                # 布局：文字占绝大部分(0.85)，删除按钮占一小部分(0.15)
-                row_c1, row_c2 = st.columns([0.88, 0.12])
+                # 每一行的布局
+                row_c1, row_c2 = st.columns([0.9, 0.1])
                 
                 with row_c1:
-                    # 使用 text_input 的 disabled 模式来模拟一个漂亮的只读条，或者直接 markdown
-                    # 这里用 markdown + CSS 样式模拟数据条
+                    # 🔴 极度紧凑的样式：padding 减小到 5px 10px
                     st.markdown(f"""
                     <div style="
-                        background-color: #111; 
-                        padding: 8px 12px; 
+                        background-color: #0e0e0e; 
+                        padding: 5px 10px; 
                         border-radius: 4px; 
                         border: 1px solid #222; 
                         margin-bottom: 2px;
-                        font-size: 14px;">
+                        font-size: 13px;
+                        white-space: nowrap; 
+                        overflow: hidden; 
+                        text-overflow: ellipsis;
+                        color: #d0d0d0;">
                         {word}
                     </div>
                     """, unsafe_allow_html=True)
                 
                 with row_c2:
-                    # 删除按钮：纯 X
+                    # 删除按钮
                     if st.button("✕", key=f"del_{target_cat}_{i}_{word}", use_container_width=True):
-                        # 删除逻辑
                         new_list = [w for w in current_words if w != word]
                         st.session_state.db_all[target_cat] = new_list
                         save_data(WAREHOUSE[target_cat], new_list)
                         st.rerun()
 
-    # 底部手动添加
+    # 底部快速添加
     c_add1, c_add2 = st.columns([4, 1])
     with c_add1:
         new_word_in = st.text_input("Add new item...", label_visibility="collapsed")
