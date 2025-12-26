@@ -21,7 +21,7 @@ if "DEEPSEEK_KEY" in st.secrets:
         pass
 
 # ===========================
-# 2. 核心组件
+# 2. 辅助函数
 # ===========================
 def smart_pick(category):
     db = st.session_state.get("db_all", {})
@@ -30,7 +30,7 @@ def smart_pick(category):
     return ""
 
 def assemble_skeleton(user_input):
-    """秒级组装骨架 (CPU 本地运算)"""
+    """秒级组装骨架"""
     subject = user_input if user_input.strip() else smart_pick("Subject")
     
     parts = [
@@ -47,7 +47,24 @@ def assemble_skeleton(user_input):
     if random.random() > 0.6:
         parts.append(f"with {smart_pick('Accent')} details")
         
-    return ", ".join([p for p in parts if p and " style" not in p[:1]]) # 简单清洗空值
+    return ", ".join([p for p in parts if p and " style" not in p[:1]])
+
+def render_dark_card(content):
+    """渲染深灰色卡片 (替代 st.info)"""
+    # 使用 Streamlit 的背景色微调，做出卡片感
+    st.markdown(f"""
+    <div style="
+        background-color: #262730; 
+        padding: 15px; 
+        border-radius: 8px; 
+        border: 1px solid #3d3d3d; 
+        margin-bottom: 10px;
+        color: #e0e0e0;
+        font-family: sans-serif;
+    ">
+        {content}
+    </div>
+    """, unsafe_allow_html=True)
 
 # ===========================
 # 3. 界面交互
@@ -62,44 +79,40 @@ with c2:
     qty = st.number_input("Batch Size", 1, 8, 4)
 
 # ===========================
-# 4. 执行逻辑 (核心修改区)
+# 4. 执行逻辑
 # ===========================
 if st.button("Generate", type="primary", use_container_width=True):
     
-    # --- 第一阶段：秒出骨架 (Instant) ---
-    st.session_state.final_solutions = [] # 清空旧数据
-    placeholders = []   # 用于存放 UI 占位符
-    skeletons = []      # 用于存放原始数据
+    st.session_state.final_solutions = [] 
+    placeholders = []   
+    skeletons = []      
     
-    # 1. 瞬间生成所有框框和骨架
+    # --- 第一阶段：秒出骨架 ---
     for i in range(qty):
         idx = i + 1
-        # 创建一个带有边框的容器
-        with st.container(border=True):
-            # 创建一个空的占位符，用来变魔术
-            ph = st.empty()
-            placeholders.append(ph)
-            
-            # 立即生成骨架
-            sk = assemble_skeleton(user_in)
-            skeletons.append(sk)
-            
-            # ⚡️ 立即显示骨架 + 思考状态
-            # 这里用灰色字体显示，表示是“生肉”
-            ph.markdown(f"""
-            **Option {idx}:** `{sk}`  
-            \n
-            *✨ AI is polishing...*
-            """)
+        # 使用 st.empty 占位
+        ph = st.empty()
+        placeholders.append(ph)
+        
+        sk = assemble_skeleton(user_in)
+        skeletons.append(sk)
+        
+        # 初始状态：显示骨架 (用 Markdown 模拟深色块)
+        with ph.container():
+            st.markdown(f"""
+            <div style="background-color: #1e1e1e; padding: 15px; border-radius: 8px; border: 1px dashed #444; color: #888;">
+                <strong>Option {idx}:</strong> {sk} <br><br>
+                <span style="color: #4caf50;">✨ AI is thinking...</span>
+            </div>
+            """, unsafe_allow_html=True)
     
-    # --- 第二阶段：逐个流式润色 (Streaming) ---
+    # --- 第二阶段：流式润色 ---
     sys_prompt = "You are a tattoo art director. Refine the keywords into a high-quality Midjourney prompt."
-    
     final_results = []
 
     for i, sk in enumerate(skeletons):
         idx = i + 1
-        ph = placeholders[i] # 找到对应的那个框
+        ph = placeholders[i]
         
         user_prompt = f"""
         Raw Keywords: {sk}
@@ -110,68 +123,62 @@ if st.button("Generate", type="primary", use_container_width=True):
         full_response = ""
         
         try:
-            if client:
-                # 🌊 开启流式传输 (Stream=True)
-                stream = client.chat.completions.create(
-                    model="deepseek-chat",
-                    messages=[
-                        {"role": "system", "content": sys_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=0.9,
-                    stream=True  # <--- 关键！
-                )
-                
-                # 🎬 逐字打印效果 (覆盖掉原来的骨架)
-                full_response = st.write_stream(stream)
-                
-                # 如果 AI 没按格式返回，手动补前缀
-                if not full_response.startswith("**"):
-                    # 因为 write_stream 已经写到屏幕上了，这里修正内存里的数据即可
-                    full_response = f"**Option {idx}:** {full_response}"
-
-            else:
-                # 无 Key 模式：模拟打字机效果
-                dummy_text = f"**Option {idx}:** {sk} (Offline Mode)"
-                
-                def dummy_stream():
-                    for word in dummy_text.split(" "):
-                        yield word + " "
-                        time.sleep(0.05)
-                
-                full_response = st.write_stream(dummy_stream)
+            # 清空占位符，准备开始流式输出
+            ph.empty()
+            
+            # 创建一个深色容器来承载流式文字
+            # 注意：st.write_stream 很难直接嵌在 HTML div 里，
+            # 所以这里我们用 st.container(border=True) 自带的深灰背景
+            with ph.container(border=True):
+                if client:
+                    stream = client.chat.completions.create(
+                        model="deepseek-chat",
+                        messages=[{"role": "system", "content": sys_prompt},{"role": "user", "content": user_prompt}],
+                        temperature=0.9,
+                        stream=True 
+                    )
+                    full_response = st.write_stream(stream)
+                    if not full_response.startswith("**"):
+                        full_response = f"**Option {idx}:** {full_response}"
+                else:
+                    # 无 Key 模拟
+                    dummy = f"**Option {idx}:** {sk} (Offline Mode)"
+                    def dummy_stream():
+                        for w in dummy.split(" "):
+                            yield w + " "
+                            time.sleep(0.05)
+                    full_response = st.write_stream(dummy_stream)
 
         except Exception as e:
-            # 报错时的回退
-            err_msg = str(e)
-            note = "Connection Error"
-            if "401" in err_msg: note = "Invalid API Key"
-            
-            final_text = f"**Option {idx}:** {sk} \n\n*({note} - Raw Data)*"
-            ph.info(final_text) # 用静态显示替换流式
-            full_response = final_text
+            # 报错时的显示 (使用深灰卡片)
+            ph.empty()
+            with ph.container():
+                err_msg = str(e)
+                note = "Connection Error"
+                if "401" in err_msg: note = "Invalid API Key (Check Secrets)"
+                
+                final_text = f"**Option {idx}:** {sk} <br><br> <span style='color:#ff6b6b; font-size:0.9em;'>⚠️ {note} - Using Raw Data</span>"
+                
+                render_dark_card(final_text) # 调用深灰卡片函数
+                
+                # 存纯文本给自动化用
+                full_response = f"**Option {idx}:** {sk} ({note})"
 
-        # 存入列表，为了后面发给 Automation
         final_results.append(full_response)
 
-    # 存入 Session，防止刷新丢失
     st.session_state.final_solutions = final_results
-    st.rerun() # 重新运行一次以显示底部的按钮 (Streamlit 机制限制)
+    st.rerun()
 
 # ===========================
-# 5. 结果处理区 (从 Session 读取)
+# 5. 结果展示 (静态)
 # ===========================
 if "final_solutions" in st.session_state and st.session_state.final_solutions:
-    # 如果不是刚点击生成（即页面刷新后），需要重新把结果画出来
-    # 因为刚才的 write_stream 是暂时的
-    
-    # 只有当按钮没被按下的时候才重绘，避免重复
-    # 这里我们简单一点：每次 Rerun 后直接显示静态结果
     st.markdown("---")
     st.subheader("Final Output")
     
     for sol in st.session_state.final_solutions:
-        st.info(sol)
+        # 这里把 st.info 换成了自定义的深灰卡片
+        render_dark_card(sol)
         
     c_send, c_clear = st.columns([3, 1])
     
@@ -180,6 +187,6 @@ if "final_solutions" in st.session_state and st.session_state.final_solutions:
             st.switch_page("pages/03_🚀_Automation.py")
             
     with c_clear:
-        if st.button("Clear", use_container_width=True):
+        if st.button("Clear Results", use_container_width=True):
             st.session_state.final_solutions = []
             st.rerun()
