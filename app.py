@@ -143,11 +143,11 @@ with col_warehouse:
                     st.markdown(f"""
                     <div style="
                         background-color: #0e0e0e; 
-                        padding: 4px 4px; 
+                        padding: 20px 4px; 
                         border-radius: 4px; 
                         border: 1px solid #222; 
                         margin-bottom: 0px; 
-                        font-size: 13px;
+                        font-size: 20px;
                         white-space: nowrap; 
                         overflow: hidden; 
                         text-overflow: ellipsis;
