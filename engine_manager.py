@@ -9,23 +9,25 @@ REPO = "losran/Tattoo_Engine_V2"
 BRANCH = "main"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# 映射表
+# 映射表 (必须与你 GitHub 的实际文件名完全一致)
 WAREHOUSE = {
-    # --- Graphic (图形类) ---
+    # --- Graphic Core (图形核心) ---
     "Subject":       "data/graphic/subjects.txt",
+    "Action":        "data/graphic/actions.txt",
+    
+    # --- Style Matrix (风格矩阵) ---
     "StyleSystem":   "data/graphic/styles_system.txt",
     "Technique":     "data/graphic/styles_technique.txt",
     "Color":         "data/graphic/styles_color.txt",
     "Texture":       "data/graphic/styles_texture.txt",
     "Composition":   "data/graphic/styles_composition.txt",
     "Accent":        "data/graphic/styles_accent.txt",
-    "Action":        "data/graphic/actions.txt",
     
-    # --- Common (通用类) ---
+    # --- Atmosphere (氛围) ---
     "Mood":          "data/common/moods.txt",
     "Usage":         "data/common/usage.txt",
     
-    # --- Text (文字类) ---
+    # --- Text Asset (文字资产) ---
     "Text_English":  "data/text/text_en.txt",
     "Text_Spanish":  "data/text/text_es.txt",
     "Font_Style":    "data/text/fonts.txt",
@@ -41,7 +43,8 @@ def fetch_repo_file(filepath):
     try:
         r = requests.get(url, timeout=3)
         if r.status_code == 200:
-            return [line.strip() for line in r.text.split('\n') if line.strip()]
+            lines = [line.strip() for line in r.text.split('\n') if line.strip()]
+            return lines
         return []
     except:
         return []
@@ -59,39 +62,71 @@ def init_data():
 # 3. 数据保存 (Write)
 # ==========================================
 def save_data(file_key, new_list):
-    """更新数据"""
     logic_key = [k for k, v in WAREHOUSE.items() if v == file_key]
     if logic_key:
         st.session_state.db_all[logic_key[0]] = new_list
 
 # ==========================================
-# 4. 侧边栏 (Sidebar) - 极致精简版
+# 4. 侧边栏 (Sidebar) - 全景仪表盘版 📊
 # ==========================================
 def render_sidebar():
     with st.sidebar:
-        # 1. Logo
+        # Logo
         st.logo("images/logo.png", icon_image="images/logo.png")
         
-        st.subheader("Engine V2 Console")
+        st.subheader("Engine Console")
         st.markdown("---")
         
-        # 2. 库存监控 (改用纯文本，防止被折叠)
+        # 库存监控 (全维度展示)
         if "db_all" in st.session_state:
             db = st.session_state.db_all
             
-            # 直接显示统计数字，不花里胡哨
+            # 1. 核心 (Core)
             c_sub = len(db.get("Subject", []))
-            c_sty = len(db.get("StyleSystem", []))
-            c_ref = len(db.get("Ref_Images", []))
+            c_act = len(db.get("Action", []))
             
-            st.caption("📦 Inventory Status")
-            st.markdown(f"**Graphic**: {c_sub}")
-            st.markdown(f"**Styles**: {c_sty}")
-            st.markdown(f"**Refs**: {c_ref}")
+            # 2. 风格细节 (Details)
+            c_sys  = len(db.get("StyleSystem", []))
+            c_tech = len(db.get("Technique", []))
+            c_col  = len(db.get("Color", []))
+            c_tex  = len(db.get("Texture", []))
+            c_comp = len(db.get("Composition", []))
+            c_acc  = len(db.get("Accent", []))
+            
+            # 3. 氛围与文字 (Atmosphere & Text)
+            c_mood = len(db.get("Mood", []))
+            c_txt  = len(db.get("Text_English", []))
+            c_ref  = len(db.get("Ref_Images", []))
+            
+            # === 渲染面板 ===
+            st.caption("📦 Warehouse Status")
+            
+            # 分组 1: 图形基础
+            with st.expander("🎨 Graphic Core", expanded=True):
+                st.markdown(f"Subject: **{c_sub}**")
+                st.markdown(f"Action: **{c_act}**")
+            
+            # 分组 2: 风格矩阵 (重点展示)
+            with st.expander("💅 Style Matrix", expanded=True):
+                # 使用紧凑的两列布局
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown(f"Sys: **{c_sys}**")
+                    st.markdown(f"Col: **{c_col}**")
+                    st.markdown(f"Tex: **{c_tex}**")
+                with c2:
+                    st.markdown(f"Tech: **{c_tech}**")
+                    st.markdown(f"Comp: **{c_comp}**")
+                    st.markdown(f"Acc: **{c_acc}**")
+            
+            # 分组 3: 其他资产
+            with st.expander("🔤 Text & Mood", expanded=False):
+                st.markdown(f"Mood: **{c_mood}**")
+                st.markdown(f"Words (En): **{c_txt}**")
+                st.markdown(f"Ref Images: **{c_ref}**")
         
         st.markdown("---")
-        # 3. 刷新按钮已永久移除
-        st.caption("Data auto-loaded on startup.")
+        st.caption("✅ System Online")
 
 # ==========================================
 # 5. 图库扫描
