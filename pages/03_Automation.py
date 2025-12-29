@@ -33,7 +33,6 @@ default_text = "\n\n".join(st.session_state.global_queue) if st.session_state.gl
 # 2. 界面布局 (回归经典下拉框)
 # ===========================
 st.markdown("## Automation Central")
-st.caption("🚀 Platform-Specific Scripts (Simple & Stable)")
 
 col_opt1, col_opt2 = st.columns([3, 1])
 with col_opt1:
