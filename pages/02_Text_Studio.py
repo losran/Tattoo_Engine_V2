@@ -33,7 +33,7 @@ st.markdown("""
 <style>
     /* 1. 卡片容器：增加内边距 */
     [data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 10px !important; /* 👈 这里调节【卡片边框距离】 (0px -> 10px) */
+        padding: 4px !important; /* 👈 这里调节【卡片边框距离】 (0px -> 10px) */
         background-color: #0a0a0a;
         border: 1px solid #222;
         border-radius: 8px; /* 卡片本身圆角 */
@@ -44,7 +44,7 @@ st.markdown("""
 
     /* 2. 图片：调整与下方按钮的距离 */
     div[data-testid="stImage"] {
-        margin-bottom: 8px !important; /* 👈 这里调节【图与按钮的间距】 (-16px -> 8px) */
+        margin-bottom: 2px !important; /* 👈 这里调节【图与按钮的间距】 (-16px -> 8px) */
     }
     div[data-testid="stImage"] img {
         border-radius: 6px !important; /* 图片圆角 */
