@@ -205,7 +205,7 @@ with c_go:
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
 # ===========================
-# 6. 生成逻辑 (🔥 修复：GitHub URL + 强制双星号 + 强制换行 🔥)
+# 6. 生成逻辑 (GitHub URL + 双星号)
 # ===========================
 if run_btn:
     try:
@@ -214,14 +214,14 @@ if run_btn:
             words_pool = db.get(target_lang, []) or ["LOVE", "HOPE"]
             active_pool = list(st.session_state.selected_assets)
             
-            # 1. GitHub Raw URL
+            # 🔥 1. GitHub Raw URL 
             GITHUB_RAW_BASE = "https://raw.githubusercontent.com/losran/Tattoo_Engine_V2/main/images/"
 
             for i in range(qty):
                 word = manual_word.strip() if manual_word.strip() else random.choice(words_pool)
                 img_val = random.choice(active_pool) if active_pool else ""
                 
-                # 2. URL 编码
+                # 🔥 2. URL 编码
                 full_img_url = ""
                 if img_val:
                     safe_filename = urllib.parse.quote(img_val)
@@ -229,12 +229,9 @@ if run_btn:
                 
                 font = selected_font if selected_font != "Random" else random.choice(font_list)
                 
-                # 3. Prompt 拼接
+                # 🔥 3. Prompt: URL + 双星号 **
                 url_part = f"{full_img_url} " if full_img_url else ""
-                
-                # 🔥 关键修改：
-                # (1) 结尾硬编码 " --iw 2 **" (注意空格)
-                # (2) prompt 字符串里不带换行，但导出到队列时会自动处理
+                # 注意：这里加上了 **
                 prompt_text = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2 **"
                 
                 results.append({"image_file": img_val, "prompt_text": prompt_text})
@@ -256,7 +253,8 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
     for idx, item in enumerate(st.session_state.text_solutions):
         # 容器封装每一行
         with st.container(border=True):
-            col_img, col_text = st.columns([1, 5])
+            # 🔥 列表布局：1份图 : 4份文字 🔥
+            col_img, col_text = st.columns([1, 4])
             
             with col_img:
                 if item["image_file"]:
@@ -265,7 +263,7 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
                         st.image(full_path, use_container_width=True)
             
             with col_text:
-                # 显示 Prompt (使用 code 块)
+                # 显示 Prompt (使用 code 块方便复制)
                 st.code(item['prompt_text'], language="bash")
 
     st.write("")
@@ -273,17 +271,10 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
         if "global_queue" not in st.session_state:
             st.session_state.global_queue = []
         
-        # 导出列表
-        pure_texts = []
-        for item in st.session_state.text_solutions:
-            # 🔥 防御性编程：导出时再确保一下格式
-            # 虽然上面生成已经加了 **，这里我们不做额外处理，直接传列表。
-            # 自动化脚本如果按行读取列表，就不会错。
-            pure_texts.append(item["prompt_text"])
-            
+        # 🔥 关键修复：确保导出的是列表，且每条都带双星号 🔥
+        pure_texts = [item["prompt_text"] for item in st.session_state.text_solutions]
         st.session_state.global_queue.extend(pure_texts)
         
-        # 提示用户具体导入了多少条
         st.toast(f"✅ Imported {len(pure_texts)} tasks to Automation")
         time.sleep(1)
         st.switch_page("pages/03_Automation.py")
