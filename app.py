@@ -54,40 +54,90 @@ with col_ingest:
         label_visibility="collapsed"
     )
 
-    if st.button("Analyze & Extract", use_container_width=True):
+    if st.button("Start Analysis", use_container_width=True):
         if not st.session_state.input_text:
-            st.warning("Input is empty")
-        elif not client:
-            st.error("DeepSeek Key missing")
+            st.warning("Input is empty.")
         else:
-            with st.spinner("Processing..."):
+            with st.spinner("Analyzing..."):
+                # 🔥 恢复你调教好的核心 Prompt 逻辑
                 prompt = f"""
-                Task: Extract keywords to JSON.
-                Categories: {", ".join(WAREHOUSE.keys())}
-                Format: {{"Subject": ["item"], "StyleSystem": ["style"]}}
-                Input: {st.session_state.input_text}
+                任务：将纹身描述文本拆解为结构化关键词。
+                
+                【重要规则】
+                1. 请务必区分：
+                   - Subject (主体): 具体的物体、生物 (如: 猫, 骷髅, 玫瑰)
+                   - StyleSystem (风格): 艺术流派 (如: 赛博朋克, Old School, 水墨)
+                   - Mood (情绪): 氛围感受 (如: 压抑, 欢快, 神圣)
+                   - Action (动作): 动态 (如: 奔跑, 燃烧, 缠绕)
+                2. 不要把风格和情绪全塞进 Subject！
+                
+                【输出格式】
+                请直接返回纯 JSON 数据，不要包含 ```json 代码块标记。格式如下：
+                {{
+                    "Subject": ["词1", "词2"],
+                    "Action": ["词1"],
+                    "Mood": ["词1"],
+                    "StyleSystem": ["词1"],
+                    "Usage": ["词1"]
+                }}
+                
+                可用Key: Subject, Action, Mood, Usage, StyleSystem, Technique, Color, Texture, Composition, Accent
+
+                输入文本：{st.session_state.input_text}
                 """
+                
                 try:
-                    res = client.chat.completions.create(
+                    res_obj = client.chat.completions.create(
                         model="deepseek-chat",
                         messages=[{"role": "user", "content": prompt}],
-                        temperature=0.1
-                    ).choices[0].message.content
-                    
-                    clean_json = res.replace("```json", "").replace("```", "").strip()
-                    data = json.loads(clean_json)
+                        temperature=0.1 # 保持低随机性，确保输出稳定
+                    )
+                    res = res_obj.choices[0].message.content
                     
                     parsed = []
-                    for cat, words in data.items():
-                        target_key = None
-                        for k in WAREHOUSE:
-                            if k.lower() == cat.lower(): target_key = k; break
-                        if target_key and isinstance(words, list):
-                            for w in words: parsed.append({"Category": target_key, "Keyword": w})
-                                
+                    
+                    # --- 1. 深度 JSON 解析逻辑 ---
+                    try:
+                        clean_json = res.replace("```json", "").replace("```", "").strip()
+                        data = json.loads(clean_json)
+                        
+                        for cat, words in data.items():
+                            target_key = None
+                            for k in WAREHOUSE:
+                                # 模糊匹配分类，增强容错
+                                if k.lower() == cat.lower() or k.lower() in cat.lower():
+                                    target_key = k
+                                    break
+                            
+                            if target_key and isinstance(words, list):
+                                for w in words:
+                                    if w and isinstance(w, str):
+                                        parsed.append({"cat": target_key, "val": w.strip()})
+                                        
+                    except json.JSONDecodeError:
+                        # --- 2. 备用解析逻辑 (Fallback) ---
+                        # 如果 AI 没吐出标准 JSON，尝试强行切分文本
+                        clean_res = res.replace("：", ":").replace("\n", "|").replace("，", ",")
+                        for block in clean_res.split("|"):
+                            if ":" in block:
+                                parts = block.split(":", 1)
+                                if len(parts) == 2:
+                                    cat, words = parts
+                                    cat = cat.strip()
+                                    target_key = None
+                                    for k in WAREHOUSE:
+                                        if k.lower() in cat.lower(): 
+                                            target_key = k
+                                            break
+                                    if target_key:
+                                        for w in words.split(","):
+                                            w = w.strip()
+                                            if w: parsed.append({"cat": target_key, "val": w})
+
                     st.session_state.ai_results = parsed
+
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.error(f"Request Error: {e}")
 
     if st.session_state.ai_results:
         st.write("")
