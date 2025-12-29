@@ -8,7 +8,7 @@ def apply_pro_style():
         @import url('{font_url}');
 
         /* ============================
-           1. 布局修正
+           1. 布局修正 (👉 修复点：这里改动了)
            ============================ */
         .block-container {{
             padding-top: 4rem !important;
@@ -18,12 +18,14 @@ def apply_pro_style():
             max-width: 100% !important;
         }}
         
+        /* 🔴 修改A：只隐藏菜单和页脚，不要隐藏 Header，否则按钮也会消失 */
         #MainMenu, footer {{ visibility: hidden !important; }} 
 
+        /* 🔴 修改B：把 Header 变成透明且允许鼠标穿透 (这样才能点到下面的按钮) */
         header {{ 
-            visibility: visible !important;
+            visibility: visible !important; /* 必须可见 */
             background-color: transparent !important;
-            pointer-events: none !important;
+            pointer-events: none !important; /* 让鼠标穿透 Header 空白处 */
         }}
 
         .stApp {{ background-color: #000000; }}
@@ -61,7 +63,7 @@ def apply_pro_style():
         
         .stTextArea textarea:focus, .stTextInput input:focus {{
             border-color: #777 !important; 
-            box-shadow: none !important;    
+            box-shadow: none !important;   
             outline: none !important;
         }}
 
@@ -109,12 +111,14 @@ def apply_pro_style():
         }}
 
         /* ============================
-           5. 侧边栏修复
+           5. 侧边栏修复 (👉 修复点：这里改动了)
            =========================== */
         [data-testid="stSidebar"] {{ background-color: #0a0a0a !important; border-right: 1px solid #1a1a1a !important; }}
         
+        /* 隐藏幽灵文字 */
         [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"] *, [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"] * {{ display: none !important; }}
         
+        /* 🔴 修改C：按钮本身必须 pointer-events: auto，否则会被 Header 的穿透属性影响导致点不到 */
         [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"], [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"] {{
             border: 1px solid #333 !important; 
             background-color: #111 !important; 
@@ -125,48 +129,20 @@ def apply_pro_style():
             align-items: center !important; 
             justify-content: center !important;
             
+            /* 关键：恢复点击 */
             pointer-events: auto !important; 
             cursor: pointer !important;
             
             position: fixed !important; 
             left: 1rem !important; 
-            top: 0.8rem !important; 
+            top: 0.8rem !important; /*稍微往下挪一点点，视觉更舒服*/
             z-index: 999999 !important;
         }}
         
+        /* 箭头绘制 (保持不变) */
         [data-testid="stHeader"] button::after {{ content: "" !important; display: block !important; width: 8px !important; height: 8px !important; border-top: 2px solid #888 !important; border-right: 2px solid #888 !important; }}
         [data-testid="stHeader"] button[data-testid="stSidebarCollapsedControl"]::after {{ transform: rotate(45deg); }}
         [data-testid="stHeader"] button[data-testid="stSidebarExpandedControl"]::after {{ transform: rotate(-135deg); }}
-
-        /* ============================
-           6. Text Studio 画廊特调 (Gallery CSS)
-           ============================ */
-        /* 隐藏 Checkbox 的文字标签 (仅留框) */
-        div[data-testid="stCheckbox"] label {{ display: none !important; }}
-        
-        /* 让勾选框“浮”在图片左上角 */
-        div[data-testid="stCheckbox"] {{
-            margin-bottom: -40px !important; /* 负边距上移 */
-            margin-left: 5px !important;     /* 左边距 */
-            padding-top: 5px !important;
-            z-index: 99 !important;          /* 确保在顶层 */
-            position: relative;
-            width: 30px !important;          /* 限制点击热区 */
-        }}
-        
-        /* 图片容器优化 */
-        div[data-testid="stImage"] {{
-            padding-top: 0px !important;
-        }}
-        div[data-testid="stImage"] img {{
-            border-radius: 8px !important;
-            transition: transform 0.2s !important;
-        }}
-        /* 鼠标悬停放大特效 */
-        div[data-testid="stImage"] img:hover {{
-            transform: scale(1.02) !important;
-            z-index: 10 !important;
-        }}
 
     </style>
     """, unsafe_allow_html=True)
