@@ -27,28 +27,37 @@ if "selected_assets" not in st.session_state:
     st.session_state.selected_assets = set()
 
 # ===========================
-# 1. 纯净视觉 CSS
+# 1. 样式调整 (此处调节间距)
 # ===========================
 st.markdown("""
 <style>
-    /* 1. 卡片容器：紧凑化，去内边距 */
+    /* 1. 卡片容器：增加内边距 */
     [data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 0px !important; 
+        padding: 10px !important; /* 👈 这里调节【卡片边框距离】 (0px -> 10px) */
         background-color: #0a0a0a;
         border: 1px solid #222;
-        overflow: hidden;
+        border-radius: 8px; /* 卡片本身圆角 */
     }
     [data-testid="stVerticalBlockBorderWrapper"]:hover {
         border-color: #555;
     }
 
-    /* 2. 按钮优化：填满底部，无缝拼接 */
-    button {
-        border-radius: 0px !important;
-        margin: 0px !important;
+    /* 2. 图片：调整与下方按钮的距离 */
+    div[data-testid="stImage"] {
+        margin-bottom: 8px !important; /* 👈 这里调节【图与按钮的间距】 (-16px -> 8px) */
+    }
+    div[data-testid="stImage"] img {
+        border-radius: 6px !important; /* 图片圆角 */
         width: 100%;
+        display: block;
+    }
+
+    /* 3. 按钮优化：不再贴底，而是作为独立元素 */
+    button {
+        width: 100%;
+        border-radius: 6px !important; /* 按钮恢复圆角 */
         border: none !important;
-        white-space: nowrap !important; /* 防止文字换行 */
+        white-space: nowrap !important;
     }
 
     /* Primary (选中 - 绿色) */
@@ -56,7 +65,7 @@ st.markdown("""
         background-color: #1b3a1b !important;
         color: #4CAF50 !important;
         font-weight: 600 !important;
-        height: 38px !important; /* 稍微加高一点，更好点 */
+        height: 36px !important;
     }
     button[kind="primary"]:hover {
         background-color: #2e6b2e !important;
@@ -65,42 +74,30 @@ st.markdown("""
 
     /* Secondary (未选/删除 - 深灰) */
     button[kind="secondary"] {
-        background-color: #111 !important;
+        background-color: #161616 !important; /* 稍微亮一点的灰 */
         color: #888 !important;
-        height: 38px !important;
-        border-top: 1px solid #222 !important;
-        border-right: 1px solid #222 !important;
+        height: 36px !important;
+        border: 1px solid #222 !important; /* 加回边框让它更像按钮 */
     }
     button[kind="secondary"]:hover {
         background-color: #222 !important;
         color: #ccc !important;
+        border-color: #444 !important;
     }
     
     /* 删除按钮特定样式 */
-    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"] {
-        border-right: none !important;
-    }
     div[data-testid="column"]:nth-of-type(2) button[kind="secondary"]:hover {
         background-color: #330000 !important;
         color: #ff4444 !important;
-    }
-
-    /* 3. 图片样式：无缝贴合 */
-    div[data-testid="stImage"] {
-        margin-bottom: -16px !important;
-    }
-    div[data-testid="stImage"] img {
-        border-radius: 0px !important;
-        width: 100%;
-        display: block;
+        border-color: #ff4444 !important;
     }
     
-    /* 4. 隐藏 Streamlit 图片全屏按钮 (保持纯净) */
+    /* 隐藏 Streamlit 全屏按钮 */
     button[title="View fullscreen"] {
         display: none;
     }
     
-    /* 5. 布局切换器样式微调 */
+    /* 布局切换器样式 */
     div[role="radiogroup"] {
         justify-content: flex-end;
     }
@@ -117,7 +114,7 @@ available_langs = [k for k in raw_keys if k.startswith("Text_")]
 if not available_langs: available_langs = ["Text_English"]
 
 # ===========================
-# 3. 顶部工具栏 (Upload + Layout Control)
+# 3. 顶部工具栏
 # ===========================
 st.markdown("## Text Studio")
 
@@ -132,22 +129,16 @@ with c_up:
     )
 
 with c_view:
-    # 🔥 核心升级：三端布局切换器 🔥
-    # 使用 Radio 横向排列，直观切换
+    # 布局切换器
     layout_mode = st.radio(
         "Layout", 
         ["PC", "Tablet", "Mobile"], 
         horizontal=True, 
-        index=0, # 默认 PC
+        index=0, 
         label_visibility="collapsed"
     )
     
-    # 映射逻辑
-    col_map = {
-        "PC": 5,      # 5列：高密度
-        "Tablet": 3,  # 3列：中密度
-        "Mobile": 2   # 2列：巨型卡片
-    }
+    col_map = {"PC": 5, "Tablet": 3, "Mobile": 2}
     col_count = col_map[layout_mode]
 
 if uploaded_file is not None:
@@ -183,13 +174,11 @@ valid_files = [x for x in full_paths if os.path.exists(x[1])]
 valid_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
 sorted_image_files = [x[0] for x in valid_files]
 
-# 清理无效选中
 st.session_state.selected_assets = {f for f in st.session_state.selected_assets if f in sorted_image_files}
 
 if not sorted_image_files:
     st.info("Library is empty.")
 else:
-    # 动态列数
     cols = st.columns(col_count)
     
     for idx, file_name in enumerate(sorted_image_files):
@@ -197,32 +186,29 @@ else:
         col = cols[idx % col_count]
         
         with col:
-            # 极简卡片容器
+            # 卡片容器 (带 10px 内边距)
             with st.container(border=True):
-                # 1. 图片
+                # 1. 图片 (带 8px 下边距)
                 st.image(file_path, use_container_width=True)
                 
-                # 2. 底部操作栏 (选中 | 删除)
-                # 比例保持 3:1，确保选中按钮够大
+                # 2. 底部操作栏 (分离式按钮)
                 c_sel, c_del = st.columns([3, 1], gap="small")
                 
                 is_selected = file_name in st.session_state.selected_assets
                 
                 with c_sel:
-                    # 选中按钮 (简化文字，适应小屏)
+                    # 选中按钮
                     if is_selected:
-                        # 选中态：绿色
                         if st.button("✅ Active", key=f"s_{file_name}", type="primary", use_container_width=True):
                             st.session_state.selected_assets.remove(file_name)
                             st.rerun()
                     else:
-                        # 未选态：灰色
                         if st.button("Select", key=f"s_{file_name}", type="secondary", use_container_width=True):
                             st.session_state.selected_assets.add(file_name)
                             st.rerun()
                 
                 with c_del:
-                    # 删除按钮 (仅图标)
+                    # 删除按钮
                     if st.button("🗑", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete"):
                         try:
                             os.remove(file_path)
