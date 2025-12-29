@@ -36,30 +36,26 @@ if "selected_assets" not in st.session_state:
     st.session_state.selected_assets = set()
 
 # ===========================
-# 1. 核心逻辑：回调函数 (Callbacks)
-#    这些函数会在页面重新渲染前执行，彻底消灭频闪
+# 1. 核心回调 (Callbacks)
 # ===========================
 
 def toggle_selection(file_name):
-    """切换选中状态的回调"""
     if file_name in st.session_state.selected_assets:
         st.session_state.selected_assets.remove(file_name)
     else:
         st.session_state.selected_assets.add(file_name)
 
 def delete_asset(file_path, file_name):
-    """删除图片的回调"""
     try:
         if os.path.exists(file_path):
             os.remove(file_path)
-        # 删除后也要清理选中状态
         if file_name in st.session_state.selected_assets:
             st.session_state.selected_assets.remove(file_name)
     except Exception as e:
         print(f"Delete Error: {e}")
 
 # ===========================
-# 2. CSS 样式 (保持原样)
+# 2. CSS 样式
 # ===========================
 st.markdown("""
 <style>
@@ -86,6 +82,7 @@ st.markdown("""
     /* 选中态 (绿) */
     button[kind="primary"] {
         background-color: #1b3a1b !important;
+        border: 1px solid #2e5c2e !important;
         color: #4CAF50 !important;
         font-weight: 600 !important;
         height: 36px !important;
@@ -102,7 +99,7 @@ st.markdown("""
     button[kind="secondary"]:hover { background-color: #222 !important; color: #ccc !important; border-color: #444 !important; }
     
     /* 删除按钮红光 */
-    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"]:hover {
+    div[data-testid="column"] button[help="Delete"]:hover {
         background-color: #330000 !important;
         color: #ff4444 !important;
         border-color: #ff4444 !important;
@@ -110,6 +107,14 @@ st.markdown("""
     
     button[title="View fullscreen"] { display: none; }
     div[role="radiogroup"] { justify-content: flex-end; }
+    
+    /* 结果区文本框优化 */
+    div[data-testid="stTextArea"] textarea {
+        font-size: 12px !important;
+        background-color: #111 !important;
+        color: #aaa !important;
+        border: 1px solid #333 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -128,7 +133,6 @@ with c_up:
     )
 
 with c_view:
-    # 布局切换会触发全页刷新，这是正常的
     layout_mode = st.radio("Layout", ["PC", "Tablet", "Mobile"], horizontal=True, label_visibility="collapsed")
     col_map = {"PC": 5, "Tablet": 3, "Mobile": 2}
     col_count = col_map[layout_mode]
@@ -149,7 +153,7 @@ if uploaded_file is not None:
 st.divider()
 
 # ===========================
-# 4. 局部刷新画廊 (Fragment + Callbacks)
+# 4. 局部刷新画廊 (Fragment)
 # ===========================
 
 @fragment
@@ -167,67 +171,36 @@ def render_gallery_fragment(current_col_count):
     valid_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
     sorted_image_files = [x[0] for x in valid_files]
 
-    # 清理
     st.session_state.selected_assets = {f for f in st.session_state.selected_assets if f in sorted_image_files}
 
     if not sorted_image_files:
         st.info("Library is empty.")
     else:
         cols = st.columns(current_col_count)
-        
         for idx, file_name in enumerate(sorted_image_files):
             file_path = os.path.join("images", file_name)
             col = cols[idx % current_col_count]
             
             with col:
                 with st.container(border=True):
-                    # 图片
                     st.image(file_path, use_container_width=True)
-                    
-                    # 按钮组
                     c_sel, c_del = st.columns([3, 1], gap="small")
-                    
                     is_selected = file_name in st.session_state.selected_assets
                     
                     with c_sel:
-                        # 🔥 关键修改：使用 on_click 回调，不使用 rerun 🔥
                         if is_selected:
-                            st.button(
-                                "✅ Active", 
-                                key=f"s_{file_name}", 
-                                type="primary", 
-                                use_container_width=True,
-                                on_click=toggle_selection,  # <--- 绑定回调
-                                args=(file_name,)          # <--- 传参
-                            )
+                            st.button("✅ Active", key=f"s_{file_name}", type="primary", use_container_width=True, on_click=toggle_selection, args=(file_name,))
                         else:
-                            st.button(
-                                "Select", 
-                                key=f"s_{file_name}", 
-                                type="secondary", 
-                                use_container_width=True,
-                                on_click=toggle_selection,  # <--- 绑定回调
-                                args=(file_name,)          # <--- 传参
-                            )
+                            st.button("Select", key=f"s_{file_name}", type="secondary", use_container_width=True, on_click=toggle_selection, args=(file_name,))
                     
                     with c_del:
-                        st.button(
-                            "🗑", 
-                            key=f"d_{file_name}", 
-                            type="secondary", 
-                            use_container_width=True, 
-                            help="Delete",
-                            on_click=delete_asset,         # <--- 绑定回调
-                            args=(file_path, file_name)    # <--- 传参
-                        )
+                        st.button("🗑", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete", on_click=delete_asset, args=(file_path, file_name))
 
-    # 状态统计
     with c_stat:
         count = len(st.session_state.selected_assets)
         if count > 0:
             st.markdown(f"<div style='text-align:right; color:#4CAF50; padding-top:10px;'>✅ <b>{count}</b> Selected</div>", unsafe_allow_html=True)
 
-# 渲染 Fragment
 render_gallery_fragment(col_count)
 
 st.divider()
@@ -251,6 +224,9 @@ with c_go:
 
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
+# ===========================
+# 6. 生成逻辑 (🔥 核心修复：绝对路径 + 数据结构 🔥)
+# ===========================
 if run_btn:
     try:
         with st.spinner("Processing..."):
@@ -260,37 +236,82 @@ if run_btn:
 
             for i in range(qty):
                 word = manual_word.strip() if manual_word.strip() else random.choice(words_pool)
-                img_val = random.choice(active_pool) if active_pool else ""
+                
+                img_val = ""
+                full_img_path = ""
+                
+                if active_pool:
+                    img_val = random.choice(active_pool)
+                    # 🔥 修复 1：计算绝对路径 (Absolute Path)
+                    # 这样 Automation 脚本才能找到文件并上传
+                    # parent_dir 是项目根目录，images 是根目录下的文件夹
+                    full_img_path = os.path.abspath(os.path.join(parent_dir, "images", img_val))
+                
                 font = selected_font if selected_font != "Random" else random.choice(font_list)
-                url_part = f"{img_val} " if img_val else ""
+                
+                # 🔥 修复 2：将绝对路径拼接到 Prompt 开头
+                url_part = f"{full_img_path} " if full_img_path else ""
                 prompt_text = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2"
-                results.append({"image_file": img_val, "prompt_text": prompt_text})
+                
+                results.append({
+                    "image_file": img_val,
+                    "prompt_text": prompt_text
+                })
             
             st.session_state.text_solutions = results
-            # 生成结果需要全局刷新来显示在下方，这里使用 rerun 是合理的
             time.sleep(0.3)
             st.rerun()
             
     except Exception as e:
         st.error(str(e))
 
+# ===========================
+# 7. 结果展示 (🔥 核心修复：方案封装 + 卡片化 🔥)
+# ===========================
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
     st.write("") 
     st.subheader("Results")
-    for item in st.session_state.text_solutions:
-        with st.container(border=True):
-            col_img, col_text = st.columns([1, 4])
-            with col_img:
+    
+    # 🔥 使用与画廊一致的 Grid 布局来封装结果 🔥
+    # 这里我们复用 col_count 确保在各端都好看
+    res_cols = st.columns(col_count) 
+    
+    for idx, item in enumerate(st.session_state.text_solutions):
+        col = res_cols[idx % col_count]
+        
+        with col:
+            # 方案封装：使用卡片包裹
+            with st.container(border=True):
+                # 1. 图片预览
                 if item["image_file"]:
+                    # 这里依然计算显示用的路径
                     full_path = os.path.abspath(os.path.join("images", item["image_file"]))
                     if os.path.exists(full_path):
                         st.image(full_path, use_container_width=True)
-            with col_text:
-                st.markdown(f"**Prompt:** {item['prompt_text']}")
+                
+                # 2. Prompt 文本 (封装在卡片内)
+                st.text_area(
+                    "Prompt",
+                    value=item['prompt_text'],
+                    height=100,
+                    key=f"res_{idx}",
+                    label_visibility="collapsed"
+                )
+
     st.write("")
-    if st.button("Import to Automation", type="primary", use_container_width=True):
+    st.divider()
+    
+    # 底部导入按钮
+    if st.button("Import to Automation Queue", type="primary", use_container_width=True):
         if "global_queue" not in st.session_state:
             st.session_state.global_queue = []
+        
+        # 导出纯文本 Prompt (包含路径)
         pure_texts = [item["prompt_text"] for item in st.session_state.text_solutions]
+        
+        # 🔥 修复 3：确保是 List Extend，让自动化识别为多条任务
         st.session_state.global_queue.extend(pure_texts)
+        
+        st.toast(f"✅ Imported {len(pure_texts)} tasks to Automation")
+        time.sleep(1)
         st.switch_page("pages/03_Automation.py")
