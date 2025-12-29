@@ -2,7 +2,7 @@ import streamlit as st
 import os
 
 # ==========================================
-# 1. 本地仓库映射 (保持本地路径修复)
+# 1. 本地仓库映射
 # ==========================================
 WAREHOUSE = {
     # --- Graphic Core ---
@@ -29,7 +29,7 @@ WAREHOUSE = {
 }
 
 # ==========================================
-# 2. 数据读取与初始化 (Logic Fix Only)
+# 2. 数据读取与初始化
 # ==========================================
 def read_local_file(filepath):
     """直接读取本地 txt 文件"""
@@ -71,47 +71,59 @@ def save_data(file_key, new_list):
         st.error(f"Save failed: {e}")
 
 # ==========================================
-# 4. 侧边栏 (UI Revert - 100% 还原)
+# 4. 侧边栏 (已修复 Logo 路径 & 紧凑布局)
 # ==========================================
 def render_sidebar():
     with st.sidebar:
-        # 还原你的 Logo 逻辑
-        if os.path.exists("images/logo.png"):
+        # ✅ 修复：更新 Logo 路径为 images/logo/logo.png
+        logo_path = "images/logo/logo.png"
+        
+        # 优先检测新路径，如果找不到再检测旧路径（做个兼容）
+        if os.path.exists(logo_path):
+            st.logo(logo_path, icon_image=logo_path)
+        elif os.path.exists("images/logo.png"):
             st.logo("images/logo.png", icon_image="images/logo.png")
         
         st.subheader("Console")
         st.markdown("---")
         
-        # 库存监控 (垂直排列，不分栏，最稳)
+        # 库存监控 (保持垂直清单，但合并代码减少间距，防止出现滚动条)
         if "db_all" in st.session_state:
             db = st.session_state.db_all
             
             # --- Part 1: Graphic ---
             st.markdown("### Graphic Core")
-            st.markdown(f"**Subject:** {len(db.get('Subject', []))}")
-            st.markdown(f"**Action:** {len(db.get('Action', []))}")
+            # 使用紧凑写法
+            st.markdown(f"""
+            **Subject:** {len(db.get('Subject', []))}  
+            **Action:** {len(db.get('Action', []))}
+            """)
             
             st.markdown("---")
             
             # --- Part 2: Style ---
             st.markdown("### Style Matrix")
-            st.markdown(f"**System:** {len(db.get('StyleSystem', []))}")
-            st.markdown(f"**Technique:** {len(db.get('Technique', []))}")
-            st.markdown(f"**Color:** {len(db.get('Color', []))}")
-            st.markdown(f"**Texture:** {len(db.get('Texture', []))}")
-            st.markdown(f"**Composition:** {len(db.get('Composition', []))}")
-            st.markdown(f"**Accent:** {len(db.get('Accent', []))}")
+            st.markdown(f"""
+            **System:** {len(db.get('StyleSystem', []))}  
+            **Technique:** {len(db.get('Technique', []))}  
+            **Color:** {len(db.get('Color', []))}  
+            **Texture:** {len(db.get('Texture', []))}  
+            **Composition:** {len(db.get('Composition', []))}  
+            **Accent:** {len(db.get('Accent', []))}
+            """)
             
             st.markdown("---")
             
             # --- Part 3: Assets ---
             st.markdown("### Assets")
-            st.markdown(f"**Mood:** {len(db.get('Mood', []))}")
-            st.markdown(f"**Words:** {len(db.get('Text_English', []))}")
-            st.markdown(f"**Refs:** {len(db.get('Ref_Images', []))}")
+            st.markdown(f"""
+            **Mood:** {len(db.get('Mood', []))}  
+            **Words:** {len(db.get('Text_English', []))}  
+            **Refs:** {len(db.get('Ref_Images', []))}
+            """)
 
 # ==========================================
-# 5. 图库扫描 (Bug Fix Only)
+# 5. 图库扫描
 # ==========================================
 def fetch_image_refs_auto():
     refs = {}
@@ -125,7 +137,6 @@ def fetch_image_refs_auto():
             for file in files:
                 if file.lower().endswith(valid_exts):
                     key_name = os.path.splitext(file)[0]
-                    # 保留绝对路径修复，确保图片能显示
                     refs[f"📂 {key_name}"] = file 
         except Exception:
             pass
