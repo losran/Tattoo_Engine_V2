@@ -5,7 +5,7 @@ import random
 import time
 
 # ===========================
-# 0. 路径修复与基础设置
+# 0. 基础设置
 # ===========================
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
@@ -24,82 +24,43 @@ if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
 # ===========================
-# 1. 模块化 CSS (卡片式设计)
+# 1. 仅保留极简的辅助 CSS
 # ===========================
+# 这里的 CSS 仅仅是为了让输入框居中和删除按钮变红，
+# 绝不触碰 Checkbox 的核心渲染逻辑，确保稳健。
 st.markdown("""
 <style>
-    /* --- 卡片容器样式微调 --- */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #0e0e0e; /* 卡片背景微深 */
-        border-color: #333;
-    }
-
-    /* --- 1. 顶部勾选框 --- */
-    /* 隐藏 Label */
-    div[data-testid="stCheckbox"] label span { display: none; }
-    /* 让勾选框居中 */
-    div[data-testid="stCheckbox"] {
-        display: flex;
-        justify-content: center;
-        margin-bottom: 5px;
-    }
-
-    /* --- 2. 文件名输入框 (微型化) --- */
+    /* 让文件名输入框文字居中，看起来像标题 */
     div[data-testid="stTextInput"] input {
-        font-size: 11px;
         text-align: center;
-        height: 28px;
-        min-height: 28px;
-        background-color: #000 !important;
-        border: 1px solid #222 !important;
-        color: #888 !important;
-        padding: 0px 5px;
+        font-size: 12px;
+        color: #888;
     }
     div[data-testid="stTextInput"] input:focus {
-        border-color: #666 !important;
-        color: #fff !important;
-    }
-
-    /* --- 3. 删除按钮 (全宽、红色警示) --- */
-    button[kind="secondary"] {
-        border: 1px dashed #331111 !important;
-        background: transparent !important;
-        color: #552222 !important;
-        font-size: 10px !important;
-        padding: 2px !important;
-        height: auto !important;
-        min-height: 0px !important;
-        margin-top: 5px;
-        width: 100%;
-    }
-    button[kind="secondary"]:hover {
-        border-color: #ff4444 !important;
-        color: #ff4444 !important;
-        background-color: #220000 !important;
+        color: #fff;
     }
     
-    /* --- 图片圆角 --- */
-    div[data-testid="stImage"] img {
-        border-radius: 4px;
+    /* 简单的红色文字修饰删除按钮 (不破坏结构) */
+    button[kind="secondary"] p {
+        color: #ff4444;
+    }
+    button[kind="secondary"] {
+        border-color: #331111;
+    }
+    button[kind="secondary"]:hover {
+        border-color: #ff0000;
+        background-color: #220000;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ===========================
-# 2. 数据准备
-# ===========================
-db = st.session_state.get("db_all", {})
-font_list = db.get("Font_Style", []) or ["Gothic", "Chrome"]
-available_langs = [k for k in db.keys() if k.startswith("Text_")] or ["Text_English"]
-
-# ===========================
-# 3. 顶部：资产入库 (Upload)
+# 2. 上传区
 # ===========================
 st.markdown("## Text Studio")
 
-# 极简上传条
 uploaded_file = st.file_uploader(
-    "📤 Upload New Asset", 
+    "📤 Upload Asset", 
     type=['jpg', 'png', 'jpeg', 'webp'],
     key=f"uploader_{st.session_state.uploader_key}",
     label_visibility="collapsed"
@@ -115,20 +76,20 @@ if uploaded_file is not None:
         f.write(uploaded_file.getbuffer())
     
     st.session_state.uploader_key += 1
-    st.toast(f"✅ Asset Imported: {uploaded_file.name}")
+    st.toast(f"✅ Saved: {uploaded_file.name}")
     time.sleep(0.5)
     st.rerun()
 
 st.divider()
 
 # ===========================
-# 4. 核心：资产管理模块 (Image Management Module)
+# 3. 核心：原生卡片画廊
 # ===========================
-c_title, c_stat = st.columns([3, 1])
-with c_title:
+c_head, c_info = st.columns([3, 1])
+with c_head:
     st.subheader("Visual Warehouse")
 
-# 获取并排序图片 (新图在前)
+# 获取图片并排序
 raw_map = fetch_image_refs_auto()
 if not isinstance(raw_map, dict): raw_map = {}
 all_files = [v for v in raw_map.values() if v]
@@ -142,7 +103,7 @@ selected_images = []
 if not sorted_image_files:
     st.info("Warehouse is empty.")
 else:
-    # 5列布局，gap="medium" 保证卡片间距清晰
+    # 使用 5 列布局，gap="medium" 拉开间距
     cols = st.columns(5, gap="medium")
     
     for idx, file_name in enumerate(sorted_image_files):
@@ -150,73 +111,71 @@ else:
         col = cols[idx % 5]
         
         with col:
-            # 🔥 核心：卡片封装 🔥
-            # border=True 会自动生成一个带灰色边框的盒子
+            # 🔥 核心：原生 Container 卡片 🔥
             with st.container(border=True):
                 
-                # --- A. 顶部：选中状态 ---
-                # 使用 key 绑定状态
-                is_checked = st.checkbox("Select", key=f"chk_{file_name}", label_visibility="collapsed")
+                # --- A. 顶部选择栏 (Columns 布局) ---
+                # 左边放勾选框，右边放状态文字
+                c_check, c_state = st.columns([1, 3])
+                
+                with c_check:
+                    # 原生 Checkbox，不加 label 避免冗余
+                    is_checked = st.checkbox("sel", key=f"chk_{file_name}", label_visibility="collapsed")
+                
+                with c_state:
+                    if is_checked:
+                        # 选中时显示绿色文字
+                        st.markdown(":white_check_mark: **Active**")
+                    else:
+                        # 未选中显示灰色
+                        st.caption("Select")
+
                 if is_checked:
                     selected_images.append(file_name)
-                    # 选中时给个绿色边框反馈 (CSS模拟)
-                    st.markdown(
-                        """<style>
-                        div[data-testid="stVerticalBlockBorderWrapper"]:has(input:checked) {
-                            border: 1px solid #00FF00 !important;
-                            box-shadow: 0 0 5px rgba(0,255,0,0.2);
-                        }
-                        </style>""", 
-                        unsafe_allow_html=True
-                    )
-                
-                # --- B. 中间：图片展示 ---
+
+                # --- B. 图片展示 ---
                 st.image(file_path, use_container_width=True)
-                
-                # --- C. 下方：文件名编辑 (回车重命名) ---
+
+                # --- C. 文件名编辑 ---
                 name_body, ext = os.path.splitext(file_name)
-                # 这个 text_input 用于显示和修改名字
                 new_name_body = st.text_input(
                     "rename",
                     value=name_body,
-                    key=f"rename_{file_name}",
+                    key=f"name_{file_name}",
                     label_visibility="collapsed",
-                    placeholder="Rename..."
+                    help="Edit and press Enter to rename"
                 )
                 
-                # 触发重命名逻辑
+                # 重命名逻辑
                 if new_name_body != name_body:
                     new_full_name = new_name_body + ext
                     new_full_path = os.path.join("images", new_full_name)
                     try:
                         os.rename(file_path, new_full_path)
-                        st.toast(f"♻️ Renamed to: {new_full_name}")
+                        st.toast(f"Renamed: {new_full_name}")
                         time.sleep(0.5)
                         st.rerun()
-                    except Exception as e:
-                        st.error("Error renaming")
+                    except:
+                        st.error("Error")
 
-                # --- D. 底部：删除按钮 ---
-                if st.button("🗑 DELETE", key=f"del_{file_name}", type="secondary", use_container_width=True):
+                # --- D. 删除按钮 ---
+                # 使用 secondary 样式，配合上面的微量 CSS 变红
+                if st.button("🗑️ Delete", key=f"del_{file_name}", type="secondary", use_container_width=True):
                     try:
                         os.remove(file_path)
-                        st.toast("🗑 Asset Deleted")
-                        time.sleep(0.5)
                         st.rerun()
                     except:
                         pass
 
-# 选中状态统计
-with c_stat:
+# 状态统计
+with c_info:
     if selected_images:
-        st.markdown(f"<div style='text-align:right; color:#00FF00; font-weight:bold;'>✅ {len(selected_images)} Active</div>", unsafe_allow_html=True)
-    else:
-        st.markdown(f"<div style='text-align:right; color:#666;'>No selection</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:right; color:#4CAF50;'><b>{len(selected_images)}</b> Selected</div>", unsafe_allow_html=True)
 
 st.divider()
 
 # ===========================
-# 5. 生成控制台
+# 4. 生成控制
 # ===========================
 c_lang, c_font, c_qty, c_go = st.columns([1, 1, 0.8, 1])
 with c_lang:
@@ -231,11 +190,11 @@ with c_go:
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
 # ===========================
-# 6. 自动化生成逻辑
+# 5. 生成逻辑
 # ===========================
 if run_btn:
     try:
-        with st.spinner("Pipeline Running..."):
+        with st.spinner("Processing..."):
             results = []
             words_pool = db.get(target_lang, []) or ["LOVE", "HOPE"]
 
@@ -263,11 +222,11 @@ if run_btn:
         st.error(str(e))
 
 # ===========================
-# 7. 结果交付区
+# 6. 结果展示
 # ===========================
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
     st.write("") 
-    st.subheader("Results Delivery")
+    st.subheader("Results")
     
     for item in st.session_state.text_solutions:
         with st.container(border=True):
