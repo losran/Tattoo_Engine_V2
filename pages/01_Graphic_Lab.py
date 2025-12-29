@@ -17,7 +17,7 @@ from engine_manager import init_data, render_sidebar
 from style_manager import apply_pro_style
 
 # ===========================
-# 1. 初始化
+# 1. 页面配置与初始化
 # ===========================
 st.set_page_config(layout="wide", page_title="Graphic Lab")
 apply_pro_style()
@@ -32,117 +32,123 @@ if "DEEPSEEK_KEY" in st.secrets:
         pass
 
 # ==========================================
-# 2. 核心引擎 (严格复刻 9+1 配料逻辑)
+# 2. 核心引擎 (权重升级版)
 # ==========================================
-def smart_pick(category):
+def smart_pick(category, count=1):
+    """从数据库抽取指定数量的元素"""
     db = st.session_state.get("db_all", {})
     items = db.get(category, [])
-    if items: return random.choice(items)
-    return ""
+    if not items: return []
+    # 允许抽取的数量不超过库存
+    actual_count = min(count, len(items))
+    return random.sample(items, actual_count)
 
-def assemble_skeleton_fixed(user_input):
+def assemble_weighted_skeleton(user_input):
     """
-    【核心逻辑堡垒 - 绝不阉割版】
-    严格遵守：Intent -> Subject -> Style -> Tech -> Color -> Texture -> Comp -> Action -> Mood -> Accent -> Usage
+    【高权重组装引擎】
+    逻辑：Intent -> 多重Subject -> 核心Action -> 核心Mood -> 其他配料
     """
-    # 1. 备料 (9个核心配料 + 1个点缀)
-    sub     = smart_pick("Subject")
-    s_sys   = smart_pick("StyleSystem")
-    s_tech  = smart_pick("Technique")
-    s_col   = smart_pick("Color")
-    s_tex   = smart_pick("Texture")
-    s_comp  = smart_pick("Composition")
-    act     = smart_pick("Action")
-    mood    = smart_pick("Mood")
-    usage   = smart_pick("Usage")
-    s_acc   = smart_pick("Accent") # 将点缀变为可控项
-
-    # 2. 确定核心主体 (如果用户没输入，则从 Subject 抽)
-    final_subject = user_input.strip() if user_input.strip() else sub
+    # 1. 抽取多重主体 (2-3个)
+    sub_count = random.randint(2, 3)
+    subjects = smart_pick("Subject", sub_count)
+    if user_input.strip():
+        subjects = [user_input.strip()] + subjects[:sub_count-1]
     
-    # 3. 组装链条 (严格按照 01_creative.py 的 Sequence)
+    # 2. 强化配料
+    action = " ".join(smart_pick("Action", 1))
+    mood = " ".join(smart_pick("Mood", 1))
+    
+    # 3. 基础配料
+    s_sys   = " ".join(smart_pick("StyleSystem", 1))
+    s_tech  = " ".join(smart_pick("Technique", 1))
+    s_col   = " ".join(smart_pick("Color", 1))
+    s_tex   = " ".join(smart_pick("Texture", 1))
+    s_comp  = " ".join(smart_pick("Composition", 1))
+    usage   = " ".join(smart_pick("Usage", 1))
+    s_acc   = " ".join(smart_pick("Accent", 1))
+
+    # 4. 组装逻辑：将动作和情绪前置，增加视觉冲突
     parts = [
-        final_subject,                 
-        f"{s_sys} style" if s_sys else "",               
-        f"{s_tech} technique" if s_tech else "",              
-        f"{s_col} palette" if s_col else "",               
-        f"{s_tex} texture" if s_tex else "",               
-        f"{s_comp} composition" if s_comp else "",              
-        act,                 
-        f"{mood} vibe" if mood else "",
-        f"with {s_acc} details" if s_acc else "" # 取消 40% 随机，有就加上
+        f"【核心动作：{action}】",
+        f"【氛围基调：{mood}】",
+        f"主体元素：{' & '.join(subjects)}",
+        f"风格：{s_sys}",
+        f"技法：{s_tech}",
+        f"色调：{s_col}",
+        f"质感：{s_tex}",
+        f"构图：{s_comp}",
+        f"细节：{s_acc}"
     ]
 
-    # 4. 生成初步链条
-    raw_chain = "，".join([p for p in parts if p])
+    raw_chain = " | ".join([p for p in parts if "：" in p and p.split("：")[1].strip()])
     
-    # 5. 处理 Usage (严格复刻“纹在...”逻辑)
     if usage:
-        raw_chain += f"，纹在{usage}"
+        raw_chain += f" | 纹刺部位：{usage}"
         
-    return raw_chain
+    return raw_chain, subjects
 
 # ===========================
 # 3. 界面交互
 # ===========================
-st.markdown("## 🎨 Graphic Lab")
-st.caption("Auto-Assembly -> AI Polish -> Batch Handoff")
+st.markdown("## 🎨 Graphic Lab (Deep Refinement)")
+st.caption("High Weight Action & Mood -> Multi-Subject -> 200 Words Polish")
 
 c1, c2 = st.columns([3, 1])
 with c1:
-    user_in = st.text_input("Core Idea / Subject", placeholder="在此输入核心创意或主体...", label_visibility="collapsed")
+    user_idea = st.text_input("Core Idea", placeholder="输入关键词或留空盲盒...", label_visibility="collapsed")
 with c2:
-    qty = st.number_input("Batch Size", 1, 8, 4, label_visibility="collapsed")
+    qty = st.number_input("Batch", 1, 8, 4, label_visibility="collapsed")
 
 # ===========================
-# 4. 执行逻辑
+# 4. 执行生成 (AI 深度润色)
 # ===========================
-if st.button("Generate", type="primary", use_container_width=True):
+if st.button("✨ 一键生成高权重方案", type="primary", use_container_width=True):
     
     st.session_state.graphic_solutions = [] 
     placeholders = []   
     skeletons = []      
-    subject_anchors = [] # 记录主体用于 AI 锁死
+    subject_anchors = [] 
     
-    # --- 第一阶段：骨架成型 ---
+    # --- 第一阶段：骨架生成 ---
     for i in range(qty):
-        idx = i + 1
         ph = st.empty()
         placeholders.append(ph)
-        
-        sk = assemble_skeleton_fixed(user_in)
+        sk, subs = assemble_weighted_skeleton(user_idea)
         skeletons.append(sk)
-        
-        # 提取第一个逗号前的词作为 Subject 锚点
-        anchor = sk.split('，')[0].strip()
-        subject_anchors.append(anchor)
+        subject_anchors.append(subs)
         
         with ph.container(border=True):
-            st.markdown(f"**方案{idx}：** {sk}")
-            st.caption("✨ 资深策展人正在润色文案...") 
+            st.markdown(f"**方案{i+1}：** {sk}")
+            st.caption("正在进行深度叙事润色...") 
     
-    # --- 第二阶段：AI 艺术化润色 (还原调教逻辑) ---
-    sys_prompt = "你是一位资深刺青策展人。请将提供的关键词组合润色为极具艺术感的纹身描述。每段必须出现'纹身'二字。"
+    # --- 第二阶段：AI 深度润色指令 ---
+    sys_prompt = """你是一位顶级的纹身艺术策展人与视觉叙事大师。
+    你的任务是将干燥的关键词转化为极具冲击力、充满灵魂的纹身设计方案。
+    每段描述必须包含'纹身'二字，字数控制在 100-200 字之间。
     
+    润色重点：
+    1. 极力放大【核心动作】的动态张力。
+    2. 深度渲染【氛围基调】的情绪感染力。
+    3. 将多个主体有机融合，构建一个有故事感的视觉画面。
+    4. 词汇要高级且富有绘画感（如：破碎感、流动性、神圣感、狂乱的线条）。"""
+
     final_results = []
 
     for i, sk in enumerate(skeletons):
         idx = i + 1
         ph = placeholders[i]
-        anchor = subject_anchors[i]
+        anchors = "、".join(subject_anchors[i])
         
         user_prompt = f"""
-        【原始骨架】：{sk}
-        【核心主体】：{anchor}
+        【原始骨架信息】：{sk}
+        【必须保留的主体】：{anchors}
         
-        【指令】：
-        1. 必须在描述中“字面保留”核心主体：{anchor}。
-        2. 必须严格保留骨架中的风格、颜色、部位描述。
-        3. 必须严格以 "**方案{idx}：**" 开头。
-        4. 输出一段 60-90 字的完整视觉描述。
+        【定制指令】：
+        1. 严格以 "**方案{idx}：**" 开头。
+        2. 将字数扩展至 100-200 字，增加对动作和情绪的文学化描写。
+        3. 确保视觉描述能够指导 Midjourney 生成高品质图像。
         """
         
-        full_response = ""
         try:
             ph.empty()
             with ph.container(border=True):
@@ -150,19 +156,12 @@ if st.button("Generate", type="primary", use_container_width=True):
                     stream = client.chat.completions.create(
                         model="deepseek-chat",
                         messages=[{"role": "system", "content": sys_prompt},{"role": "user", "content": user_prompt}],
-                        temperature=0.85, 
+                        temperature=0.9, 
                         stream=True 
                     )
                     full_response = st.write_stream(stream)
-                    
-                    if not full_response.startswith(f"**方案{idx}：**"):
-                        full_response = f"**方案{idx}：** {full_response}"
-                    
-                    # 强校验：如果主体被润色丢了，补回来
-                    if anchor not in full_response:
-                        full_response = full_response.replace(f"**方案{idx}：**", f"**方案{idx}：** 围绕着【{anchor}】展开的纹身")
                 else:
-                    full_response = f"**方案{idx}：** {sk} (Offline Mode)"
+                    full_response = f"**方案{idx}：** {sk} (AI Offline)"
                     st.write(full_response)
         except Exception as e:
             full_response = f"**方案{idx}：** {sk} (Error: {str(e)})"
@@ -174,7 +173,7 @@ if st.button("Generate", type="primary", use_container_width=True):
     st.rerun()
 
 # ===========================
-# 5. 结果展示与叠加发送
+# 5. 结果展示
 # ===========================
 if "graphic_solutions" in st.session_state and st.session_state.graphic_solutions:
     st.markdown("---")
@@ -185,17 +184,16 @@ if "graphic_solutions" in st.session_state and st.session_state.graphic_solution
             st.markdown(sol)
         
     c_send, c_clear = st.columns([3, 1])
-    
     with c_send:
-        if st.button("🚀 Send ALL to Automation Pipeline (叠加)", type="primary", use_container_width=True):
+        if st.button("🚀 发送至自动化流水线 (叠加)", type="primary", use_container_width=True):
             if "global_queue" not in st.session_state:
                 st.session_state.global_queue = []
             st.session_state.global_queue.extend(st.session_state.graphic_solutions)
-            st.toast(f"✅ 已添加 {len(st.session_state.graphic_solutions)} 组方案")
+            st.toast(f"✅ 已添加 {len(st.session_state.graphic_solutions)} 组高权重方案")
             time.sleep(0.8)
             st.switch_page("pages/03_🚀_Automation.py")
             
     with c_clear:
-        if st.button("🗑️ Clear Results", use_container_width=True):
+        if st.button("🗑️ 清空结果", use_container_width=True):
             st.session_state.graphic_solutions = []
             st.rerun()
