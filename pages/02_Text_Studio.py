@@ -57,7 +57,7 @@ def toggle_all_selection(all_files_list):
         st.session_state.selected_assets = set(all_files_list)
 
 # ===========================
-# 2. CSS 样式 (去除了所有多余的框)
+# 2. CSS 样式 (无框 + 蓝色链接)
 # ===========================
 st.markdown("""
 <style>
@@ -89,7 +89,7 @@ st.markdown("""
     button[title="View fullscreen"] { display: none; }
     div[role="radiogroup"] { justify-content: flex-end; }
     
-    /* 🔥 核心优化：让 Markdown 里的链接更明显 🔥 */
+    /* 链接样式优化 */
     .stMarkdown a {
         color: #4da6ff !important; /* 亮蓝色 */
         text-decoration: underline !important; /* 下划线 */
@@ -183,31 +183,29 @@ render_gallery_fragment(col_count)
 st.divider()
 
 # ===========================
-# 5. 生成控制区
+# 5. 生成控制区 (🔥 修正：选语种 -> 选单词 🔥)
 # ===========================
 db = st.session_state.get("db_all", {})
-font_list = db.get("Font_Style", []) or ["Gothic", "Chrome"]
-available_langs = [k for k in list(db.keys()) if k.startswith("Text_")] or ["Text_English"]
 
-# (新代码)
-# 1. 筛选出以 text_ 开头的语种文件作为词库
+# 1. 筛选语种 (查找文件名包含 text_ 的 key)
 raw_keys = list(db.keys())
 available_langs = [k for k in raw_keys if "text_" in k] 
-if not available_langs: available_langs = ["text_en"] # 兜底防止报错
+if not available_langs: available_langs = ["text_en"] # 兜底
 
 c_lang, c_word, c_qty, c_go = st.columns([1, 1, 0.8, 1])
 
-# 2. 语种选择 (左边)
+# 2. 语种选择 (控制加载哪个词库)
 with c_lang:
-    target_lang = st.selectbox("Language", available_langs, label_visibility="collapsed")
+    target_lang = st.selectbox("Language Bank", available_langs, label_visibility="collapsed")
 
-# 获取当前语种下的所有单词
+# 获取当前语种下的词库列表
 current_words_pool = db.get(target_lang, []) or ["LOVE", "HOPE", "FAITH"]
 
-# 3. 单词选择 (中间 - 替代了原来的字体选择)
+# 3. 单词选择 (替代了原来的字体选择)
 with c_word:
     # 选项：第一个是随机，后面跟着具体单词
-    word_options = ["🎲 Random (随机)"] + current_words_pool
+    # 这样用户既可以选 Random，也可以选具体某个词
+    word_options = ["🎲 Random (随机词)"] + current_words_pool
     selected_word_opt = st.selectbox("Pick Word", word_options, label_visibility="collapsed")
 
 with c_qty:
@@ -218,41 +216,39 @@ with c_go:
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
 # ===========================
-# 6. 生成逻辑 (GitHub URL + 强制表头 + 双星号)
+# 6. 生成逻辑 (🔥 修正：去风格 + 纯净Prompt 🔥)
 # ===========================
 if run_btn:
     try:
         with st.spinner("Processing..."):
             results = []
-            words_pool = db.get(target_lang, []) or ["LOVE", "HOPE"]
             active_pool = list(st.session_state.selected_assets)
             
-            # 🔥 1. GitHub Raw URL 
+            # GitHub Raw URL 基座
             GITHUB_RAW_BASE = "https://raw.githubusercontent.com/losran/Tattoo_Engine_V2/main/images/"
 
-            # (新代码片段)
             for i in range(qty):
                 # 🔥 1. 确定单词 (优先级：手动输入 > 下拉框指定 > 下拉框随机)
                 if manual_word.strip():
                     final_word = manual_word.strip()
-                elif selected_word_opt == "🎲 Random (随机)":
+                elif selected_word_opt == "🎲 Random (随机词)":
                     final_word = random.choice(current_words_pool)
                 else:
                     final_word = selected_word_opt
 
-                # 2. 图片处理 (保持不变，Github Raw 链接)
+                # 2. 图片处理 (URL编码 + 拼接)
                 img_val = random.choice(active_pool) if active_pool else ""
                 full_img_url = ""
                 if img_val:
                     safe_filename = urllib.parse.quote(img_val)
                     full_img_url = f"{GITHUB_RAW_BASE}{safe_filename}"
                 
-                # 🔥 3. Prompt 构造 (删除了风格词)
-                # 现在的逻辑是：完全依赖垫图(URL)来控制风格，只告诉MJ画什么词
+                # 🔥 3. Prompt 构造 (纯净版)
+                # 删除了 style keywords，只保留 word + 垫图
                 url_part = f"{full_img_url} " if full_img_url else ""
                 prefix = f"**方案{i+1}：** "
                 
-                # 注意：这里删掉了 {font} style typography
+                # 示例: **方案1：** https://... Tattoo design of the word 'LOVE', clean white background...
                 prompt_text = f"{prefix}{url_part}Tattoo design of the word '{final_word}', clean white background, high contrast --iw 2 **"
                 
                 results.append({"image_file": img_val, "prompt_text": prompt_text})
@@ -284,8 +280,7 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
                         st.image(full_path, use_container_width=True)
             
             with col_text:
-                # 🔥 核心修改：使用 st.markdown 替代 st.code 🔥
-                # 这样链接就是蓝色的，可以直接点击打开，而且没有那个丑陋的代码框
+                # 🔥 Markdown 渲染 (无框，蓝色链接)
                 st.markdown(item['prompt_text'])
 
     st.write("")
@@ -293,8 +288,8 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
         if "global_queue" not in st.session_state:
             st.session_state.global_queue = []
         
-        # 导出列表
-        pure_texts = [item["prompt_text"] for item in st.session_state.text_solutions]
+        # 导出列表 (每一条加换行符，防止粘连)
+        pure_texts = [item["prompt_text"] + "\n" for item in st.session_state.text_solutions]
         st.session_state.global_queue.extend(pure_texts)
         
         st.toast(f"✅ Imported {len(pure_texts)} tasks to Automation")
