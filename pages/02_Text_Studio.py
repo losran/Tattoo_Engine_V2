@@ -24,7 +24,11 @@ except ImportError:
 st.set_page_config(layout="wide", page_title="Text Studio")
 apply_pro_style()
 render_sidebar()
-init_data()
+
+# 🔥 核心修复：确保数据加载 🔥
+# 如果还没加载过，或者用户点击了刷新，就重新加载
+if "db_all" not in st.session_state:
+    init_data()
 
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
@@ -183,31 +187,50 @@ render_gallery_fragment(col_count)
 st.divider()
 
 # ===========================
-# 5. 生成控制区 (🔥 修正：选语种 -> 选单词 🔥)
+# 5. 生成控制区 (🔥 增加刷新按钮，解决新文件不识别问题 🔥)
 # ===========================
+
+# 布局：增加一个小的刷新按钮列
+c_lang, c_refresh, c_word, c_qty, c_go = st.columns([1, 0.3, 1, 0.5, 0.8])
+
+# 1. 刷新按钮逻辑 (Force Reload)
+with c_refresh:
+    # 垂直居中一点
+    st.write("")
+    st.write("") 
+    if st.button("🔄", help="Refresh Library (Reload files from disk)"):
+        # 强制清除缓存
+        if "db_all" in st.session_state:
+            del st.session_state["db_all"]
+        # 重新加载
+        init_data()
+        st.toast("✅ Library Refreshed!")
+        time.sleep(0.5)
+        st.rerun()
+
+# 获取最新数据
 db = st.session_state.get("db_all", {})
 
-# 1. 筛选语种 (查找文件名包含 text_ 的 key)
-raw_keys = list(db.keys())
-available_langs = [k for k in raw_keys if "text_" in k] 
-if not available_langs: available_langs = ["text_en"] # 兜底
-
-c_lang, c_word, c_qty, c_go = st.columns([1, 1, 0.8, 1])
-
-# 2. 语种选择 (控制加载哪个词库)
+# 2. 语种选择
 with c_lang:
+    # 只要文件名里有 "text_" 就算，不管后缀
+    raw_keys = list(db.keys())
+    available_langs = sorted([k for k in raw_keys if "text_" in k])
+    if not available_langs: available_langs = ["text_en"]
+    
     target_lang = st.selectbox("Language Bank", available_langs, label_visibility="collapsed")
 
-# 获取当前语种下的词库列表
-current_words_pool = db.get(target_lang, []) or ["LOVE", "HOPE", "FAITH"]
-
-# 3. 单词选择 (替代了原来的字体选择)
+# 3. 单词选择
 with c_word:
-    # 选项：第一个是随机，后面跟着具体单词
-    # 这样用户既可以选 Random，也可以选具体某个词
+    # 获取单词列表，如果文件是空的，就给个默认提示，不然下拉框会报错
+    current_words_pool = db.get(target_lang, [])
+    if not current_words_pool:
+        current_words_pool = ["(Empty File)"]
+        
     word_options = ["🎲 Random (随机词)"] + current_words_pool
     selected_word_opt = st.selectbox("Pick Word", word_options, label_visibility="collapsed")
 
+# 4. 数量与生成
 with c_qty:
     qty = st.number_input("Qty", 1, 10, 4, label_visibility="collapsed")
 with c_go:
@@ -216,7 +239,7 @@ with c_go:
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
 # ===========================
-# 6. 生成逻辑 (🔥 修正：去风格 + 纯净Prompt 🔥)
+# 6. 生成逻辑
 # ===========================
 if run_btn:
     try:
@@ -224,31 +247,33 @@ if run_btn:
             results = []
             active_pool = list(st.session_state.selected_assets)
             
-            # GitHub Raw URL 基座
             GITHUB_RAW_BASE = "https://raw.githubusercontent.com/losran/Tattoo_Engine_V2/main/images/"
 
             for i in range(qty):
-                # 🔥 1. 确定单词 (优先级：手动输入 > 下拉框指定 > 下拉框随机)
+                # 单词逻辑
                 if manual_word.strip():
                     final_word = manual_word.strip()
                 elif selected_word_opt == "🎲 Random (随机词)":
-                    final_word = random.choice(current_words_pool)
+                    # 从当前池子里过滤掉 "(Empty File)" 这种占位符
+                    valid_pool = [w for w in current_words_pool if w != "(Empty File)"]
+                    if valid_pool:
+                        final_word = random.choice(valid_pool)
+                    else:
+                        final_word = "LOVE" # 最后的兜底
                 else:
                     final_word = selected_word_opt
 
-                # 2. 图片处理 (URL编码 + 拼接)
+                # 图片逻辑
                 img_val = random.choice(active_pool) if active_pool else ""
                 full_img_url = ""
                 if img_val:
                     safe_filename = urllib.parse.quote(img_val)
                     full_img_url = f"{GITHUB_RAW_BASE}{safe_filename}"
                 
-                # 🔥 3. Prompt 构造 (纯净版)
-                # 删除了 style keywords，只保留 word + 垫图
+                # Prompt 构造
                 url_part = f"{full_img_url} " if full_img_url else ""
                 prefix = f"**方案{i+1}：** "
                 
-                # 示例: **方案1：** https://... Tattoo design of the word 'LOVE', clean white background...
                 prompt_text = f"{prefix}{url_part}Tattoo design of the word '{final_word}', clean white background, high contrast --iw 2 **"
                 
                 results.append({"image_file": img_val, "prompt_text": prompt_text})
@@ -261,16 +286,14 @@ if run_btn:
         st.error(str(e))
 
 # ===========================
-# 7. 结果展示 (🔥 列表布局 + 无框 + 蓝色链接 🔥)
+# 7. 结果展示
 # ===========================
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
     st.write("") 
     st.subheader("Results")
     
     for idx, item in enumerate(st.session_state.text_solutions):
-        # 容器封装每一行
         with st.container(border=True):
-            # 🔥 列表布局：1份图 : 4份文字
             col_img, col_text = st.columns([1, 4])
             
             with col_img:
@@ -280,7 +303,6 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
                         st.image(full_path, use_container_width=True)
             
             with col_text:
-                # 🔥 Markdown 渲染 (无框，蓝色链接)
                 st.markdown(item['prompt_text'])
 
     st.write("")
@@ -288,7 +310,6 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
         if "global_queue" not in st.session_state:
             st.session_state.global_queue = []
         
-        # 导出列表 (每一条加换行符，防止粘连)
         pure_texts = [item["prompt_text"] + "\n" for item in st.session_state.text_solutions]
         st.session_state.global_queue.extend(pure_texts)
         
