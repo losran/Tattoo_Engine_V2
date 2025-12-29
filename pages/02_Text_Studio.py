@@ -189,11 +189,27 @@ db = st.session_state.get("db_all", {})
 font_list = db.get("Font_Style", []) or ["Gothic", "Chrome"]
 available_langs = [k for k in list(db.keys()) if k.startswith("Text_")] or ["Text_English"]
 
-c_lang, c_font, c_qty, c_go = st.columns([1, 1, 0.8, 1])
+# (新代码)
+# 1. 筛选出以 text_ 开头的语种文件作为词库
+raw_keys = list(db.keys())
+available_langs = [k for k in raw_keys if "text_" in k] 
+if not available_langs: available_langs = ["text_en"] # 兜底防止报错
+
+c_lang, c_word, c_qty, c_go = st.columns([1, 1, 0.8, 1])
+
+# 2. 语种选择 (左边)
 with c_lang:
-    target_lang = st.selectbox("Lang", available_langs, label_visibility="collapsed")
-with c_font:
-    selected_font = st.selectbox("Font", ["Random"] + font_list, label_visibility="collapsed")
+    target_lang = st.selectbox("Language", available_langs, label_visibility="collapsed")
+
+# 获取当前语种下的所有单词
+current_words_pool = db.get(target_lang, []) or ["LOVE", "HOPE", "FAITH"]
+
+# 3. 单词选择 (中间 - 替代了原来的字体选择)
+with c_word:
+    # 选项：第一个是随机，后面跟着具体单词
+    word_options = ["🎲 Random (随机)"] + current_words_pool
+    selected_word_opt = st.selectbox("Pick Word", word_options, label_visibility="collapsed")
+
 with c_qty:
     qty = st.number_input("Qty", 1, 10, 4, label_visibility="collapsed")
 with c_go:
@@ -214,23 +230,30 @@ if run_btn:
             # 🔥 1. GitHub Raw URL 
             GITHUB_RAW_BASE = "https://raw.githubusercontent.com/losran/Tattoo_Engine_V2/main/images/"
 
+            # (新代码片段)
             for i in range(qty):
-                word = manual_word.strip() if manual_word.strip() else random.choice(words_pool)
+                # 🔥 1. 确定单词 (优先级：手动输入 > 下拉框指定 > 下拉框随机)
+                if manual_word.strip():
+                    final_word = manual_word.strip()
+                elif selected_word_opt == "🎲 Random (随机)":
+                    final_word = random.choice(current_words_pool)
+                else:
+                    final_word = selected_word_opt
+
+                # 2. 图片处理 (保持不变，Github Raw 链接)
                 img_val = random.choice(active_pool) if active_pool else ""
-                
                 full_img_url = ""
                 if img_val:
-                    # 处理文件名空格和特殊字符
                     safe_filename = urllib.parse.quote(img_val)
                     full_img_url = f"{GITHUB_RAW_BASE}{safe_filename}"
                 
-                font = selected_font if selected_font != "Random" else random.choice(font_list)
-                
-                # 🔥 3. Prompt 构造 (带方案头和双星号)
+                # 🔥 3. Prompt 构造 (删除了风格词)
+                # 现在的逻辑是：完全依赖垫图(URL)来控制风格，只告诉MJ画什么词
                 url_part = f"{full_img_url} " if full_img_url else ""
+                prefix = f"**方案{i+1}：** "
                 
-                # 示例: **方案1：** https://... Tattoo... --iw 2 **
-                prompt_text = f"**方案{i+1}：** {url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2 **"
+                # 注意：这里删掉了 {font} style typography
+                prompt_text = f"{prefix}{url_part}Tattoo design of the word '{final_word}', clean white background, high contrast --iw 2 **"
                 
                 results.append({"image_file": img_val, "prompt_text": prompt_text})
             
