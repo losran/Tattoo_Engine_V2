@@ -27,45 +27,43 @@ if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
 # ===========================
-# 2. 页面专属 CSS (仅用于定位)
+# 2. 页面专属 CSS (微调卡片样式)
 # ===========================
 st.markdown("""
 <style>
-    /* 关键修复：不再暴力隐藏 Label，而是依赖 label_visibility="collapsed"
-       这里只处理定位，把 checkbox 放到图片左上角 
-    */
+    /* 1. 隐藏 Checkbox 的 Label，让布局更紧凑 */
+    div[data-testid="stCheckbox"] label span { display: none; }
     
-    /* 让 Column 变为定位基准 */
-    div[data-testid="stColumn"] {
-        position: relative;
+    /* 2. 调整输入框样式 (文件名编辑) */
+    div[data-testid="stTextInput"] input {
+        font-size: 12px;
+        padding: 5px;
+        height: 30px;
+        text-align: center;
+        background-color: transparent !important;
+        border: 1px solid #333 !important;
+    }
+    div[data-testid="stTextInput"] input:focus {
+        border-color: #666 !important;
+        background-color: #111 !important;
     }
 
-    /* 将复选框绝对定位到左上角 */
-    div[data-testid="stCheckbox"] {
-        position: absolute !important;
-        top: 5px !important;
-        left: 5px !important;
-        z-index: 99 !important;
-        background-color: rgba(0,0,0,0.3); /* 轻微背景防吞 */
-        border-radius: 4px;
-        padding: 2px;
-        width: auto !important; /* 修复宽度被写死的问题 */
-    }
-
-    /* 图片容器不需要特殊处理，保持原生 */
-    div[data-testid="stImage"] img {
-        border-radius: 6px;
-        width: 100%;
-        display: block;
-    }
-    
-    /* 选中图片的视觉反馈 (可选，仅加个淡边框) */
-    /* 由于很难通过 CSS 父级选择器选中图片，这里不做强行 Hack，保持清爽 */
-
-    /* 红色删除按钮 */
+    /* 3. 红色删除小按钮 */
     button[kind="secondary"] {
-        border-color: #ff4444 !important;
+        border: none !important;
+        background: transparent !important;
+        color: #666 !important;
+        padding: 0px !important;
+        font-size: 12px !important;
+    }
+    button[kind="secondary"]:hover {
         color: #ff4444 !important;
+        background: transparent !important;
+    }
+    
+    /* 4. 优化卡片内的图片显示 */
+    div[data-testid="stImage"] img {
+        border-radius: 4px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -106,62 +104,82 @@ if uploaded_file is not None:
 st.divider()
 
 # ===========================
-# 5. 核心交互：画廊
+# 5. 核心交互：卡片式画廊
 # ===========================
 raw_map = fetch_image_refs_auto()
 if not isinstance(raw_map, dict): raw_map = {}
 all_files = [v for v in raw_map.values() if v]
 
-# 排序：新图在前
 full_paths = [(f, os.path.join("images", f)) for f in all_files]
 valid_files = [x for x in full_paths if os.path.exists(x[1])]
 valid_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
 sorted_image_files = [x[0] for x in valid_files]
 
-# 标题与删除按钮
-c_head, c_del = st.columns([3, 1])
+c_head, c_info = st.columns([3, 1])
 with c_head:
     st.subheader("Visual Library")
-del_btn_container = c_del.empty()
 
 selected_images = []
 
 if not sorted_image_files:
     st.info("Gallery is empty.")
 else:
-    cols = st.columns(5)
+    # gap="medium" 增加图片之间的黑缝间距
+    cols = st.columns(5, gap="medium")
+    
     for idx, file_name in enumerate(sorted_image_files):
         file_path = os.path.join("images", file_name)
         col = cols[idx % 5]
         
         with col:
-            # 1. 原生复选框 (修复 Se-le-ct 乱码的关键：label_visibility="collapsed")
-            # 这会显示原生样式的勾选框（红色主题下就是红点/红框）
-            is_checked = st.checkbox("select", key=f"chk_{file_name}", label_visibility="collapsed")
-            
-            # 2. 图片展示
-            if is_checked:
-                selected_images.append(file_name)
-                # 选中时，我们只给图片加一个原生的 caption 或者一点点不透明度变化，不搞花哨的
+            # 🔥 核心修改：使用 Container 封装成卡片，自带边框 🔥
+            with st.container(border=True):
+                # 1. 顶部：勾选框
+                # 使用 columns 让 checkbox 居中或靠左
+                c_chk, c_spacer = st.columns([1, 4])
+                with c_chk:
+                    is_checked = st.checkbox("sel", key=f"chk_{file_name}", label_visibility="collapsed")
+                
+                if is_checked:
+                    selected_images.append(file_name)
+                
+                # 2. 中间：图片
                 st.image(file_path, use_container_width=True)
-                # 如果你想更明显，可以在这里加个小标记，但基于你的反馈，保持原生最好
-            else:
-                st.image(file_path, use_container_width=True)
-            
-            st.write("") # 间距修正
+                
+                # 3. 下方：文件名编辑 (回车重命名)
+                # 去掉扩展名显示，看起来更干净，但重命名时要加回去
+                name_body, ext = os.path.splitext(file_name)
+                new_name_body = st.text_input(
+                    "rename", 
+                    value=name_body, 
+                    key=f"name_{file_name}",
+                    label_visibility="collapsed",
+                    help="Press Enter to rename"
+                )
+                
+                # 重命名逻辑
+                if new_name_body != name_body:
+                    new_full_name = new_name_body + ext
+                    new_full_path = os.path.join("images", new_full_name)
+                    try:
+                        os.rename(file_path, new_full_path)
+                        st.toast(f"Renamed to: {new_full_name}")
+                        time.sleep(0.5)
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Rename failed")
 
-# --- 动态删除按钮 ---
+                # 4. 底部：删除按钮
+                if st.button("🗑️ Delete", key=f"del_{file_name}", type="secondary", use_container_width=True):
+                    try:
+                        os.remove(file_path)
+                        st.rerun()
+                    except:
+                        pass
+
+# 状态提示
 if selected_images:
-    if del_btn_container.button(f"🗑️ Delete ({len(selected_images)})", type="secondary", use_container_width=True):
-        count = 0
-        for img in selected_images:
-            p = os.path.join("images", img)
-            if os.path.exists(p):
-                os.remove(p)
-                count += 1
-        st.toast(f"Deleted {count} images")
-        time.sleep(1)
-        st.rerun()
+    st.info(f"✅ Selected **{len(selected_images)}** images for generation.")
 
 st.divider()
 
@@ -179,11 +197,6 @@ with c_go:
     run_btn = st.button("🚀 GENERATE", type="primary", use_container_width=True)
 
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
-
-if selected_images:
-    st.caption(f"✨ Generating from **{len(selected_images)} selected images**.")
-else:
-    st.caption("🎲 Mode: Text Only.")
 
 # ===========================
 # 7. 生成逻辑
