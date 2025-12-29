@@ -19,10 +19,7 @@ from style_manager import apply_pro_style
 try:
     from streamlit import fragment
 except ImportError:
-    try:
-        from streamlit import experimental_fragment as fragment
-    except ImportError:
-        fragment = lambda x: x
+    fragment = lambda x: x
 
 st.set_page_config(layout="wide", page_title="Text Studio")
 apply_pro_style()
@@ -36,7 +33,7 @@ if "selected_assets" not in st.session_state:
     st.session_state.selected_assets = set()
 
 # ===========================
-# 1. 回调函数
+# 1. 核心回调 (Callbacks)
 # ===========================
 def toggle_selection(file_name):
     if file_name in st.session_state.selected_assets:
@@ -60,11 +57,11 @@ def toggle_all_selection(all_files_list):
         st.session_state.selected_assets = set(all_files_list)
 
 # ===========================
-# 2. CSS 样式 (保持列表布局)
+# 2. CSS 样式 (去除了所有多余的框)
 # ===========================
 st.markdown("""
 <style>
-    /* 上方画廊响应式 */
+    /* 上方画廊响应式核心 */
     [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 12px !important; }
     [data-testid="column"] { min-width: 160px !important; flex: 1 1 160px !important; width: auto !important; max-width: 100% !important; }
 
@@ -81,7 +78,7 @@ st.markdown("""
     div[data-testid="stImage"] { margin-bottom: 2px !important; }
     div[data-testid="stImage"] img { border-radius: 6px !important; width: 100%; display: block; }
 
-    /* 按钮 */
+    /* 按钮基础 */
     button { width: 100%; border-radius: 6px !important; border: none !important; white-space: nowrap !important; }
     button[kind="primary"] { background-color: #1b3a1b !important; border: 1px solid #2e5c2e !important; color: #4CAF50 !important; font-weight: 600 !important; height: 36px !important; }
     button[kind="primary"]:hover { background-color: #2e6b2e !important; color: #fff !important; }
@@ -92,10 +89,11 @@ st.markdown("""
     button[title="View fullscreen"] { display: none; }
     div[role="radiogroup"] { justify-content: flex-end; }
     
-    /* 下方结果区代码块优化 */
-    .stCodeBlock {
-        border: 1px solid #333 !important;
-        border-radius: 6px !important;
+    /* 🔥 核心优化：让 Markdown 里的链接更明显 🔥 */
+    .stMarkdown a {
+        color: #4da6ff !important; /* 亮蓝色 */
+        text-decoration: underline !important; /* 下划线 */
+        font-weight: bold !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -204,7 +202,7 @@ with c_go:
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
 # ===========================
-# 6. 生成逻辑 (🔥 强制加头 + GitHub URL + 双星号 🔥)
+# 6. 生成逻辑 (GitHub URL + 强制表头 + 双星号)
 # ===========================
 if run_btn:
     try:
@@ -213,29 +211,26 @@ if run_btn:
             words_pool = db.get(target_lang, []) or ["LOVE", "HOPE"]
             active_pool = list(st.session_state.selected_assets)
             
-            # 1. GitHub Raw URL
+            # 🔥 1. GitHub Raw URL 
             GITHUB_RAW_BASE = "https://raw.githubusercontent.com/losran/Tattoo_Engine_V2/main/images/"
 
             for i in range(qty):
                 word = manual_word.strip() if manual_word.strip() else random.choice(words_pool)
                 img_val = random.choice(active_pool) if active_pool else ""
                 
-                # 2. URL 编码
                 full_img_url = ""
                 if img_val:
+                    # 处理文件名空格和特殊字符
                     safe_filename = urllib.parse.quote(img_val)
                     full_img_url = f"{GITHUB_RAW_BASE}{safe_filename}"
                 
                 font = selected_font if selected_font != "Random" else random.choice(font_list)
                 
-                # 3. 提示词拼接 (Prompt Construction)
+                # 🔥 3. Prompt 构造 (带方案头和双星号)
                 url_part = f"{full_img_url} " if full_img_url else ""
                 
-                # 🔥🔥🔥 关键修改：强制添加【**方案N：**】开头 🔥🔥🔥
-                # 这样自动化那边绝对能看出来是第几条
-                prefix = f"**方案{i+1}：** "
-                
-                prompt_text = f"{prefix}{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2 **"
+                # 示例: **方案1：** https://... Tattoo... --iw 2 **
+                prompt_text = f"**方案{i+1}：** {url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2 **"
                 
                 results.append({"image_file": img_val, "prompt_text": prompt_text})
             
@@ -247,15 +242,16 @@ if run_btn:
         st.error(str(e))
 
 # ===========================
-# 7. 结果展示 (🔥 列表布局：左图右文 🔥)
+# 7. 结果展示 (🔥 列表布局 + 无框 + 蓝色链接 🔥)
 # ===========================
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
     st.write("") 
     st.subheader("Results")
     
     for idx, item in enumerate(st.session_state.text_solutions):
+        # 容器封装每一行
         with st.container(border=True):
-            # 🔥 列表布局：左图右文
+            # 🔥 列表布局：1份图 : 4份文字
             col_img, col_text = st.columns([1, 4])
             
             with col_img:
@@ -265,8 +261,9 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
                         st.image(full_path, use_container_width=True)
             
             with col_text:
-                # 显示生成的代码
-                st.code(item['prompt_text'], language="bash")
+                # 🔥 核心修改：使用 st.markdown 替代 st.code 🔥
+                # 这样链接就是蓝色的，可以直接点击打开，而且没有那个丑陋的代码框
+                st.markdown(item['prompt_text'])
 
     st.write("")
     if st.button("Import to Automation Queue", type="primary", use_container_width=True):
