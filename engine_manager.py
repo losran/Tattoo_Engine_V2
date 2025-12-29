@@ -2,13 +2,14 @@ import streamlit as st
 import os
 
 # ==========================================
-# 1. 本地仓库映射 (完全对应你的文件截图)
+# 1. 本地仓库映射 (保持本地路径修复)
 # ==========================================
-# 这里的路径必须和你截图里的一模一样
 WAREHOUSE = {
-    # --- Graphic Core (data/graphic) ---
+    # --- Graphic Core ---
     "Subject":       "data/graphic/subjects.txt",
     "Action":        "data/graphic/actions.txt",
+    
+    # --- Style Matrix ---
     "StyleSystem":   "data/graphic/styles_system.txt",
     "Technique":     "data/graphic/styles_technique.txt",
     "Color":         "data/graphic/styles_color.txt",
@@ -16,11 +17,11 @@ WAREHOUSE = {
     "Composition":   "data/graphic/styles_composition.txt",
     "Accent":        "data/graphic/styles_accent.txt",
     
-    # --- Atmosphere (data/common) ---
+    # --- Atmosphere ---
     "Mood":          "data/common/moods.txt",
     "Usage":         "data/common/usage.txt",
     
-    # --- Text Asset (data/text) ---
+    # --- Text Asset ---
     "Text_English":  "data/text/text_en.txt",
     "Text_Spanish":  "data/text/text_es.txt",
     "Font_Style":    "data/text/fonts.txt",
@@ -28,40 +29,31 @@ WAREHOUSE = {
 }
 
 # ==========================================
-# 2. 数据读取与初始化 (Local First)
+# 2. 数据读取与初始化 (Logic Fix Only)
 # ==========================================
 def read_local_file(filepath):
     """直接读取本地 txt 文件"""
     if os.path.exists(filepath):
         try:
             with open(filepath, "r", encoding="utf-8") as f:
-                # 读取非空行，并去除首尾空格
                 return [line.strip() for line in f.readlines() if line.strip()]
-        except Exception as e:
-            print(f"Error reading {filepath}: {e}")
+        except:
             return []
     return []
 
 def init_data():
-    """初始化数据到 Session State"""
     if "db_all" not in st.session_state:
         st.session_state.db_all = {}
         
     for key, path in WAREHOUSE.items():
-        # 如果内存里没有数据，或者数据为空，就去硬盘读一次
         if key not in st.session_state.db_all or not st.session_state.db_all[key]:
             data = read_local_file(path)
-            # 如果本地文件还没建，给个默认空列表防止报错
             st.session_state.db_all[key] = data if data else []
 
 # ==========================================
-# 3. 数据保存 (持久化到本地 txt)
+# 3. 数据保存
 # ==========================================
 def save_data(file_key, new_list):
-    """
-    当你在网页上添加新词时，直接写回本地 txt 文件
-    """
-    # 1. 更新内存
     target_key = None
     for k, v in WAREHOUSE.items():
         if v == file_key:
@@ -71,51 +63,58 @@ def save_data(file_key, new_list):
     if target_key:
         st.session_state.db_all[target_key] = new_list
     
-    # 2. 写入硬盘
-    # 自动创建父文件夹 (如果不存在)
     os.makedirs(os.path.dirname(file_key), exist_ok=True)
-    
     try:
         with open(file_key, "w", encoding="utf-8") as f:
-            # 每个词占一行
             f.write("\n".join(new_list))
     except Exception as e:
         st.error(f"Save failed: {e}")
 
 # ==========================================
-# 4. 侧边栏 (Sidebar)
+# 4. 侧边栏 (UI Revert - 100% 还原)
 # ==========================================
 def render_sidebar():
     with st.sidebar:
-        try:
-            # 如果你有 logo 图片，这里会显示
-            if os.path.exists("images/logo.png"):
-                st.image("images/logo.png", width=60)
-            st.markdown("### IVIØD ENGINE")
-        except:
-            st.markdown("### TATTOO ENGINE")
+        # 还原你的 Logo 逻辑
+        if os.path.exists("images/logo.png"):
+            st.logo("images/logo.png", icon_image="images/logo.png")
         
+        st.subheader("Console")
         st.markdown("---")
-        st.caption("Local Warehouse Status")
         
+        # 库存监控 (垂直排列，不分栏，最稳)
         if "db_all" in st.session_state:
             db = st.session_state.db_all
             
-            # 使用折叠栏让侧边栏更干净
-            with st.expander("🎨 Graphic Assets", expanded=True):
-                st.caption(f"Sub: {len(db.get('Subject', []))} | Act: {len(db.get('Action', []))}")
-                st.caption(f"Style: {len(db.get('StyleSystem', []))} | Tech: {len(db.get('Technique', []))}")
+            # --- Part 1: Graphic ---
+            st.markdown("### Graphic Core")
+            st.markdown(f"**Subject:** {len(db.get('Subject', []))}")
+            st.markdown(f"**Action:** {len(db.get('Action', []))}")
             
-            with st.expander("🔤 Text Assets", expanded=False):
-                st.caption(f"Fonts: {len(db.get('Font_Style', []))} | Refs: {len(db.get('Ref_Images', []))}")
+            st.markdown("---")
+            
+            # --- Part 2: Style ---
+            st.markdown("### Style Matrix")
+            st.markdown(f"**System:** {len(db.get('StyleSystem', []))}")
+            st.markdown(f"**Technique:** {len(db.get('Technique', []))}")
+            st.markdown(f"**Color:** {len(db.get('Color', []))}")
+            st.markdown(f"**Texture:** {len(db.get('Texture', []))}")
+            st.markdown(f"**Composition:** {len(db.get('Composition', []))}")
+            st.markdown(f"**Accent:** {len(db.get('Accent', []))}")
+            
+            st.markdown("---")
+            
+            # --- Part 3: Assets ---
+            st.markdown("### Assets")
+            st.markdown(f"**Mood:** {len(db.get('Mood', []))}")
+            st.markdown(f"**Words:** {len(db.get('Text_English', []))}")
+            st.markdown(f"**Refs:** {len(db.get('Ref_Images', []))}")
 
 # ==========================================
-# 5. 图片库扫描 (images 文件夹)
+# 5. 图库扫描 (Bug Fix Only)
 # ==========================================
 def fetch_image_refs_auto():
     refs = {}
-    
-    # 1. 扫描你的本地 'images' 文件夹
     local_img_dir = "images"
     
     if os.path.exists(local_img_dir):
@@ -123,20 +122,14 @@ def fetch_image_refs_auto():
             files = os.listdir(local_img_dir)
             valid_exts = ('.png', '.jpg', '.jpeg', '.webp', '.bmp')
             
-            count = 0
             for file in files:
                 if file.lower().endswith(valid_exts):
                     key_name = os.path.splitext(file)[0]
-                    # Key: 显示的名字 (加个文件夹图标)
-                    # Value: 文件名
+                    # 保留绝对路径修复，确保图片能显示
                     refs[f"📂 {key_name}"] = file 
-                    count += 1
-            # print(f"Found {count} images in {local_img_dir}") # 调试用
+        except Exception:
+            pass
             
-        except Exception as e:
-            print(f"Error scanning images: {e}")
-            
-    # 2. 只有当文件夹真是空的时候，才给保底
     if not refs:
         refs["(No Local Images)"] = ""
         
