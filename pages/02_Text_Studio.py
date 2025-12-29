@@ -3,7 +3,6 @@ import sys
 import os
 import random
 import time
-import urllib.parse # 必须组件：用于处理中文文件名的链接转码
 
 # ===========================
 # 0. 基础设置
@@ -37,25 +36,30 @@ if "selected_assets" not in st.session_state:
     st.session_state.selected_assets = set()
 
 # ===========================
-# 1. 核心回调 (Callbacks)
+# 1. 核心逻辑：回调函数 (Callbacks)
+#    这些函数会在页面重新渲染前执行，彻底消灭频闪
 # ===========================
+
 def toggle_selection(file_name):
+    """切换选中状态的回调"""
     if file_name in st.session_state.selected_assets:
         st.session_state.selected_assets.remove(file_name)
     else:
         st.session_state.selected_assets.add(file_name)
 
 def delete_asset(file_path, file_name):
+    """删除图片的回调"""
     try:
         if os.path.exists(file_path):
             os.remove(file_path)
+        # 删除后也要清理选中状态
         if file_name in st.session_state.selected_assets:
             st.session_state.selected_assets.remove(file_name)
     except Exception as e:
         print(f"Delete Error: {e}")
 
 # ===========================
-# 2. CSS 样式 (保持网格美学)
+# 2. CSS 样式 (保持原样)
 # ===========================
 st.markdown("""
 <style>
@@ -79,24 +83,33 @@ st.markdown("""
     /* 按钮基础 */
     button { width: 100%; border-radius: 6px !important; border: none !important; white-space: nowrap !important; }
 
-    /* 按钮颜色 */
-    button[kind="primary"] { background-color: #1b3a1b !important; border: 1px solid #2e5c2e !important; color: #4CAF50 !important; font-weight: 600 !important; height: 36px !important; }
+    /* 选中态 (绿) */
+    button[kind="primary"] {
+        background-color: #1b3a1b !important;
+        color: #4CAF50 !important;
+        font-weight: 600 !important;
+        height: 36px !important;
+    }
     button[kind="primary"]:hover { background-color: #2e6b2e !important; color: #fff !important; }
-    button[kind="secondary"] { background-color: #161616 !important; color: #888 !important; height: 36px !important; border: 1px solid #222 !important; }
+
+    /* 未选态 (灰) */
+    button[kind="secondary"] {
+        background-color: #161616 !important;
+        color: #888 !important;
+        height: 36px !important;
+        border: 1px solid #222 !important;
+    }
     button[kind="secondary"]:hover { background-color: #222 !important; color: #ccc !important; border-color: #444 !important; }
-    div[data-testid="column"] button[help="Delete"]:hover { background-color: #330000 !important; color: #ff4444 !important; border-color: #ff4444 !important; }
+    
+    /* 删除按钮红光 */
+    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"]:hover {
+        background-color: #330000 !important;
+        color: #ff4444 !important;
+        border-color: #ff4444 !important;
+    }
     
     button[title="View fullscreen"] { display: none; }
     div[role="radiogroup"] { justify-content: flex-end; }
-    
-    /* 结果区文本框 */
-    div[data-testid="stTextArea"] textarea {
-        font-size: 12px !important;
-        background-color: #111 !important;
-        color: #aaa !important;
-        border: 1px solid #333 !important;
-        min-height: 80px !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -115,6 +128,7 @@ with c_up:
     )
 
 with c_view:
+    # 布局切换会触发全页刷新，这是正常的
     layout_mode = st.radio("Layout", ["PC", "Tablet", "Mobile"], horizontal=True, label_visibility="collapsed")
     col_map = {"PC": 5, "Tablet": 3, "Mobile": 2}
     col_count = col_map[layout_mode]
@@ -135,14 +149,16 @@ if uploaded_file is not None:
 st.divider()
 
 # ===========================
-# 4. 局部刷新画廊
+# 4. 局部刷新画廊 (Fragment + Callbacks)
 # ===========================
+
 @fragment
 def render_gallery_fragment(current_col_count):
     c_head, c_stat = st.columns([3, 1])
     with c_head:
         st.subheader("Visual Library")
 
+    # 获取数据
     raw_map = fetch_image_refs_auto()
     if not isinstance(raw_map, dict): raw_map = {}
     all_files = [v for v in raw_map.values() if v]
@@ -151,35 +167,67 @@ def render_gallery_fragment(current_col_count):
     valid_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
     sorted_image_files = [x[0] for x in valid_files]
 
+    # 清理
     st.session_state.selected_assets = {f for f in st.session_state.selected_assets if f in sorted_image_files}
 
     if not sorted_image_files:
         st.info("Library is empty.")
     else:
         cols = st.columns(current_col_count)
+        
         for idx, file_name in enumerate(sorted_image_files):
             file_path = os.path.join("images", file_name)
             col = cols[idx % current_col_count]
             
             with col:
                 with st.container(border=True):
+                    # 图片
                     st.image(file_path, use_container_width=True)
+                    
+                    # 按钮组
                     c_sel, c_del = st.columns([3, 1], gap="small")
+                    
                     is_selected = file_name in st.session_state.selected_assets
                     
                     with c_sel:
+                        # 🔥 关键修改：使用 on_click 回调，不使用 rerun 🔥
                         if is_selected:
-                            st.button("✅ Active", key=f"s_{file_name}", type="primary", use_container_width=True, on_click=toggle_selection, args=(file_name,))
+                            st.button(
+                                "✅ Active", 
+                                key=f"s_{file_name}", 
+                                type="primary", 
+                                use_container_width=True,
+                                on_click=toggle_selection,  # <--- 绑定回调
+                                args=(file_name,)          # <--- 传参
+                            )
                         else:
-                            st.button("Select", key=f"s_{file_name}", type="secondary", use_container_width=True, on_click=toggle_selection, args=(file_name,))
+                            st.button(
+                                "Select", 
+                                key=f"s_{file_name}", 
+                                type="secondary", 
+                                use_container_width=True,
+                                on_click=toggle_selection,  # <--- 绑定回调
+                                args=(file_name,)          # <--- 传参
+                            )
+                    
                     with c_del:
-                        st.button("🗑", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete", on_click=delete_asset, args=(file_path, file_name))
+                        st.button(
+                            "🗑", 
+                            key=f"d_{file_name}", 
+                            type="secondary", 
+                            use_container_width=True, 
+                            help="Delete",
+                            on_click=delete_asset,         # <--- 绑定回调
+                            args=(file_path, file_name)    # <--- 传参
+                        )
 
+    # 状态统计
     with c_stat:
         count = len(st.session_state.selected_assets)
         if count > 0:
             st.markdown(f"<div style='text-align:right; color:#4CAF50; padding-top:10px;'>✅ <b>{count}</b> Selected</div>", unsafe_allow_html=True)
 
+# 渲染 Fragment
 render_gallery_fragment(col_count)
 
 st.divider()
@@ -203,9 +251,6 @@ with c_go:
 
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
-# ===========================
-# 6. 生成逻辑 (🔥 GitHub URL + 双星号修正 🔥)
-# ===========================
 if run_btn:
     try:
         with st.spinner("Processing..."):
@@ -213,84 +258,39 @@ if run_btn:
             words_pool = db.get(target_lang, []) or ["LOVE", "HOPE"]
             active_pool = list(st.session_state.selected_assets)
 
-            # 🔥 1. 硬编码 GitHub 仓库 Raw 地址基座
-            # 这是 Midjourney 唯一能读懂的地址格式
-            GITHUB_RAW_BASE = "https://raw.githubusercontent.com/losran/Tattoo_Engine_V2/main/images/"
-
             for i in range(qty):
                 word = manual_word.strip() if manual_word.strip() else random.choice(words_pool)
-                
-                img_val = ""
-                full_img_url = ""
-                
-                if active_pool:
-                    img_val = random.choice(active_pool)
-                    # 🔥 2. URL 编码 + 拼接
-                    # urllib.parse.quote 把 "微信图片.png" 变成 "%E5%BE%AE..."，防止乱码报错
-                    safe_filename = urllib.parse.quote(img_val)
-                    full_img_url = f"{GITHUB_RAW_BASE}{safe_filename}"
-                
+                img_val = random.choice(active_pool) if active_pool else ""
                 font = selected_font if selected_font != "Random" else random.choice(font_list)
-                
-                # 🔥 3. Prompt 拼接：URL在前 + 结尾加 ** (双星号)
-                url_part = f"{full_img_url} " if full_img_url else ""
-                # 注意最后的 **，这是为了让你的自动化脚本切分任务
-                prompt_text = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2 **"
-                
-                results.append({
-                    "image_file": img_val,     # 用于本地显示
-                    "prompt_text": prompt_text # 最终发给自动化的指令
-                })
+                url_part = f"{img_val} " if img_val else ""
+                prompt_text = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2"
+                results.append({"image_file": img_val, "prompt_text": prompt_text})
             
             st.session_state.text_solutions = results
+            # 生成结果需要全局刷新来显示在下方，这里使用 rerun 是合理的
             time.sleep(0.3)
             st.rerun()
             
     except Exception as e:
         st.error(str(e))
 
-# ===========================
-# 7. 结果展示 (🔥 网格卡片封装 🔥)
-# ===========================
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
     st.write("") 
     st.subheader("Results")
-    
-    # 重新使用网格布局 (复用 col_count)
-    res_cols = st.columns(col_count) 
-    
-    for idx, item in enumerate(st.session_state.text_solutions):
-        col = res_cols[idx % col_count]
-        
-        with col:
-            # 使用卡片封装
-            with st.container(border=True):
-                # 1. 预览本地图片 (为了快，看本地的，发给MJ用URL)
+    for item in st.session_state.text_solutions:
+        with st.container(border=True):
+            col_img, col_text = st.columns([1, 4])
+            with col_img:
                 if item["image_file"]:
                     full_path = os.path.abspath(os.path.join("images", item["image_file"]))
                     if os.path.exists(full_path):
                         st.image(full_path, use_container_width=True)
-                
-                # 2. Prompt 文本框
-                st.text_area(
-                    "Prompt",
-                    value=item['prompt_text'],
-                    height=100,
-                    key=f"res_{idx}",
-                    label_visibility="collapsed"
-                )
-
+            with col_text:
+                st.markdown(f"**Prompt:** {item['prompt_text']}")
     st.write("")
-    
-    # 底部导入按钮
-    if st.button("Import to Automation Queue", type="primary", use_container_width=True):
+    if st.button("Import to Automation", type="primary", use_container_width=True):
         if "global_queue" not in st.session_state:
             st.session_state.global_queue = []
-        
-        # 导出 List
         pure_texts = [item["prompt_text"] for item in st.session_state.text_solutions]
         st.session_state.global_queue.extend(pure_texts)
-        
-        st.toast(f"✅ Imported {len(pure_texts)} tasks to Automation")
-        time.sleep(1)
         st.switch_page("pages/03_Automation.py")
