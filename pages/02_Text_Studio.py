@@ -61,7 +61,7 @@ with c3:
 st.divider()
 
 # ===========================
-# 4. 图片预览区 (横线下方，输入框上方)
+# 4. 图片预览区
 # ===========================
 if selected_ref_key != BLIND_BOX_OPTION and selected_ref_key in ref_map:
     img_file = ref_map[selected_ref_key]
@@ -69,7 +69,6 @@ if selected_ref_key != BLIND_BOX_OPTION and selected_ref_key in ref_map:
     
     if os.path.exists(img_abs_path):
         st.markdown("**Style Preview:**")
-        # 宽度设为 200px，既看得清又不占满屏幕
         st.image(img_abs_path, width=200)
         st.write("") 
     else:
@@ -124,7 +123,7 @@ if run_btn:
         st.error(f"Error: {str(e)}")
 
 # ===========================
-# 7. 结果展示 (自由排版版)
+# 7. 结果展示 (纯净版)
 # ===========================
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
     st.write("") 
@@ -132,7 +131,6 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
     
     for item in st.session_state.text_solutions:
         with st.container(border=True):
-            # 🔥 核心修改：列比例调整为 [1, 3]，给文字更多空间
             col_img, col_text = st.columns([1, 3])
             
             with col_img:
@@ -146,13 +144,9 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
                     st.caption("No Ref Image")
             
             with col_text:
-                # 🔥 核心修改：使用 markdown 替代 code，实现自动换行，不再“委屈”
                 st.markdown(f"**Prompt:**")
                 st.markdown(f"{item['prompt_text']}")
-                
-                # 额外提供一个小小的复制块，以防需要
-                with st.expander("Copy raw text", expanded=False):
-                    st.code(item['prompt_text'], language=None)
+                # 手动复制块已移除
 
     st.write("")
     
