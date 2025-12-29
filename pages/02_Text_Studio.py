@@ -3,6 +3,7 @@ import sys
 import os
 import random
 import time
+import urllib.parse # 用于处理中文文件名的URL编码
 
 # ===========================
 # 0. 基础设置
@@ -36,7 +37,7 @@ if "selected_assets" not in st.session_state:
     st.session_state.selected_assets = set()
 
 # ===========================
-# 1. 回调函数 (Callbacks)
+# 1. 核心回调 (Callbacks)
 # ===========================
 def toggle_selection(file_name):
     if file_name in st.session_state.selected_assets:
@@ -54,7 +55,7 @@ def delete_asset(file_path, file_name):
         print(f"Delete Error: {e}")
 
 # ===========================
-# 2. CSS 样式 (保留画廊样式，移除结果区Grid样式)
+# 2. CSS 样式 (网格布局)
 # ===========================
 st.markdown("""
 <style>
@@ -62,7 +63,7 @@ st.markdown("""
     [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 12px !important; }
     [data-testid="column"] { min-width: 160px !important; flex: 1 1 160px !important; width: auto !important; max-width: 100% !important; }
 
-    /* 画廊卡片 */
+    /* 卡片容器 */
     [data-testid="stVerticalBlockBorderWrapper"] {
         padding: 2px !important; 
         background-color: #0a0a0a;
@@ -87,6 +88,15 @@ st.markdown("""
     
     button[title="View fullscreen"] { display: none; }
     div[role="radiogroup"] { justify-content: flex-end; }
+    
+    /* 结果区文本框优化 */
+    div[data-testid="stTextArea"] textarea {
+        font-size: 12px !important;
+        background-color: #111 !important;
+        color: #aaa !important;
+        border: 1px solid #333 !important;
+        min-height: 80px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -194,7 +204,7 @@ with c_go:
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
 # ===========================
-# 6. 生成逻辑 (🔥 修复核心：绝对路径计算 🔥)
+# 6. 生成逻辑 (🔥 核心修复：GitHub Raw URL 直连 🔥)
 # ===========================
 if run_btn:
     try:
@@ -203,32 +213,36 @@ if run_btn:
             words_pool = db.get(target_lang, []) or ["LOVE", "HOPE"]
             active_pool = list(st.session_state.selected_assets)
 
+            # 🔥 定义 GitHub 仓库的 RAW 基础路径 (基于您提供的链接) 🔥
+            # 这是 Midjourney 能直接读取的公网地址
+            GITHUB_RAW_BASE = "https://raw.githubusercontent.com/losran/Tattoo_Engine_V2/main/images/"
+
             for i in range(qty):
                 word = manual_word.strip() if manual_word.strip() else random.choice(words_pool)
                 
                 img_val = ""
-                full_img_path = ""
+                full_img_url = ""
                 
                 if active_pool:
                     img_val = random.choice(active_pool)
-                    # 🔥 绝对路径计算 (Windows/Mac 通用)
-                    # os.getcwd() 获取当前工作目录，拼接 images 目录
-                    # 这会生成类似 C:\Project\images\abc.png 的路径
-                    full_img_path = os.path.abspath(os.path.join(os.getcwd(), "images", img_val))
+                    # 🔥 处理文件名 (URL编码，防止中文/空格报错)
+                    safe_filename = urllib.parse.quote(img_val)
+                    # 🔥 拼接成完整的 GitHub Raw URL
+                    full_img_url = f"{GITHUB_RAW_BASE}{safe_filename}"
                 
                 font = selected_font if selected_font != "Random" else random.choice(font_list)
                 
-                # 🔥 Prompt 拼接：路径放在最前面，确保 Automation 识别到文件指令
-                url_part = f"{full_img_path} " if full_img_path else ""
+                # 🔥 Prompt 拼接：使用公网 URL，Midjourney 此时可以读取了
+                url_part = f"{full_img_url} " if full_img_url else ""
                 prompt_text = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2"
                 
                 results.append({
-                    "image_file": img_val,
-                    "prompt_text": prompt_text
+                    "image_file": img_val,     # 用于本地预览
+                    "image_url": full_img_url, # 用于 Prompt
+                    "prompt_text": prompt_text # 最终指令
                 })
             
             st.session_state.text_solutions = results
-            # 为了确保结果显示出来，这里必须 rerun
             time.sleep(0.3)
             st.rerun()
             
@@ -236,26 +250,35 @@ if run_btn:
         st.error(str(e))
 
 # ===========================
-# 7. 结果展示 (🔥 UI回滚：列表样式 🔥)
+# 7. 结果展示 (🔥 修复：网格卡片封装 🔥)
 # ===========================
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
     st.write("") 
     st.subheader("Results")
     
-    # 回归到你喜欢的“左图右文”列表样式，清晰明了
+    # 🔥 使用网格布局 (复用 col_count) 🔥
+    res_cols = st.columns(col_count) 
+    
     for idx, item in enumerate(st.session_state.text_solutions):
-        with st.container(border=True):
-            col_img, col_text = st.columns([1, 4]) # 1:4 比例，左图右文
-            
-            with col_img:
+        col = res_cols[idx % col_count]
+        
+        with col:
+            # 方案封装：漂亮的卡片
+            with st.container(border=True):
+                # 1. 本地图片预览 (为了速度，预览还是读本地)
                 if item["image_file"]:
                     full_path = os.path.abspath(os.path.join("images", item["image_file"]))
                     if os.path.exists(full_path):
                         st.image(full_path, use_container_width=True)
-            
-            with col_text:
-                # 使用 Code 块或 TextArea 显示 Prompt，方便复制查看
-                st.code(item['prompt_text'], language="bash")
+                
+                # 2. Prompt 文本框 (封装在卡片内)
+                st.text_area(
+                    "Prompt",
+                    value=item['prompt_text'],
+                    height=100,
+                    key=f"res_{idx}",
+                    label_visibility="collapsed"
+                )
 
     st.write("")
     
@@ -264,12 +287,10 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
         if "global_queue" not in st.session_state:
             st.session_state.global_queue = []
         
-        # 🔥 关键：将 Prompt 列表逐条加入队列
-        # 这样 Automation 页面接收到的就是 ["Prompt A", "Prompt B", ...] 
-        # 而不是一坨合并的文本
-        new_tasks = [item["prompt_text"] for item in st.session_state.text_solutions]
-        st.session_state.global_queue.extend(new_tasks)
+        # 🔥 确保是 List[String]，每条 Prompt 都是独立的
+        pure_texts = [item["prompt_text"] for item in st.session_state.text_solutions]
+        st.session_state.global_queue.extend(pure_texts)
         
-        st.toast(f"✅ Imported {len(new_tasks)} tasks to Automation")
+        st.toast(f"✅ Imported {len(pure_texts)} tasks to Automation")
         time.sleep(1)
         st.switch_page("pages/03_Automation.py")
