@@ -23,65 +23,80 @@ init_data()
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
-# 🌟 初始化选中集合 🌟
 if "selected_assets" not in st.session_state:
     st.session_state.selected_assets = set()
 
 # ===========================
-# 1. 样式精准调优
+# 1. 样式微调 (无文件名版)
 # ===========================
 st.markdown("""
 <style>
-    /* --- 核心优化：减小卡片内边距，让内容更紧凑 --- */
+    /* 1. 卡片容器：紧凑化 */
     [data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 10px !important; /* 从默认的大边距改为紧凑的 10px */
-        border-color: #222;
-        background-color: #080808;
+        padding: 0px !important; /* 移除内边距，让图片贴边 */
+        background-color: #0a0a0a;
+        border: 1px solid #222;
+        overflow: hidden; /* 保证圆角 */
+    }
+    [data-testid="stVerticalBlockBorderWrapper"]:hover {
+        border-color: #555;
     }
 
-    /* --- 核心优化：标题字体变大变粗 --- */
-    div[data-testid="stTextInput"] input {
-        background-color: transparent !important;
-        border: none !important; /* 平时隐藏边框，像纯文本 */
-        color: #eee !important;
-        font-size: 16px !important; /*加大字号*/
-        font-weight: 600 !important; /*加粗*/
-        text-align: center;
-        height: 32px !important;
-        margin-top: 5px;
-        margin-bottom: 5px;
-    }
-    /* 聚焦时显示下划线，提示可编辑 */
-    div[data-testid="stTextInput"] input:focus {
-        border-bottom: 2px solid #555 !important; 
-        border-radius: 0 !important;
+    /* 2. 按钮优化：填满底部 */
+    button {
+        border-radius: 0px !important; /* 方角按钮，贴合底部 */
+        margin: 0px !important;
+        width: 100%;
+        border: none !important;
     }
 
-    /* 按钮样式微调 */
-    /* Primary (选中态 - 绿色) */
+    /* Primary (选中 - 绿色) */
     button[kind="primary"] {
-        background-color: #1a331a !important;
-        border-color: #2e5c2e !important;
+        background-color: #1b3a1b !important;
         color: #4CAF50 !important;
-        font-weight: bold !important;
+        font-weight: 600 !important;
         height: 36px !important;
     }
-    /* Secondary (未选态/删除 - 灰色/红色) */
+    button[kind="primary"]:hover {
+        background-color: #2e6b2e !important;
+        color: #fff !important;
+    }
+
+    /* Secondary (未选/删除 - 深灰) */
     button[kind="secondary"] {
-        border-color: #333 !important;
+        background-color: #111 !important;
         color: #888 !important;
         height: 36px !important;
+        border-top: 1px solid #222 !important; /* 顶部分割线 */
+        border-right: 1px solid #222 !important; /* 右侧分割线 */
     }
-    /* 删除按钮特定悬停红光 */
-    div[data-testid="column"]:nth-child(2) button[kind="secondary"]:hover {
-        border-color: #ff4444 !important;
+    button[kind="secondary"]:hover {
+        background-color: #222 !important;
+        color: #ccc !important;
+    }
+    
+    /* 删除按钮特定样式 */
+    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"] {
+        border-right: none !important;
+    }
+    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"]:hover {
+        background-color: #330000 !important;
         color: #ff4444 !important;
-        background-color: #220000 !important;
     }
 
-    /* 图片贴合 */
+    /* 3. 图片样式：无缝贴合 */
+    div[data-testid="stImage"] {
+        margin-bottom: -16px !important; /* 消除图片下方的默认间距，紧贴按钮 */
+    }
     div[data-testid="stImage"] img {
-        border-radius: 6px;
+        border-radius: 0px !important; /* 移除圆角，因为容器已经切角了 */
+        width: 100%;
+        display: block;
+    }
+    
+    /* 4. 隐藏 Streamlit 图片全屏按钮 (可选，为了纯净视觉) */
+    button[title="View fullscreen"] {
+        display: none;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -96,16 +111,23 @@ available_langs = [k for k in raw_keys if k.startswith("Text_")]
 if not available_langs: available_langs = ["Text_English"]
 
 # ===========================
-# 3. 顶部上传
+# 3. 顶部工具栏
 # ===========================
 st.markdown("## Text Studio")
 
-uploaded_file = st.file_uploader(
-    "📤 Upload Reference", 
-    type=['jpg', 'png', 'jpeg', 'webp'],
-    key=f"uploader_{st.session_state.uploader_key}",
-    label_visibility="collapsed"
-)
+c_up, c_view = st.columns([3, 1])
+
+with c_up:
+    uploaded_file = st.file_uploader(
+        "Upload", 
+        type=['jpg', 'png', 'jpeg', 'webp'],
+        key=f"uploader_{st.session_state.uploader_key}",
+        label_visibility="collapsed"
+    )
+
+with c_view:
+    # 视图密度调节
+    col_count = st.slider("Density", min_value=3, max_value=8, value=5, label_visibility="collapsed")
 
 if uploaded_file is not None:
     save_dir = "images"
@@ -125,7 +147,7 @@ if uploaded_file is not None:
 st.divider()
 
 # ===========================
-# 4. 核心：完美布局画廊
+# 4. 纯视觉画廊 (Visual Gallery)
 # ===========================
 c_head, c_stat = st.columns([3, 1])
 with c_head:
@@ -140,62 +162,44 @@ valid_files = [x for x in full_paths if os.path.exists(x[1])]
 valid_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
 sorted_image_files = [x[0] for x in valid_files]
 
+# 清理无效选中
 st.session_state.selected_assets = {f for f in st.session_state.selected_assets if f in sorted_image_files}
 
 if not sorted_image_files:
     st.info("Library is empty.")
 else:
-    cols = st.columns(5)
+    cols = st.columns(col_count)
     
     for idx, file_name in enumerate(sorted_image_files):
         file_path = os.path.join("images", file_name)
-        col = cols[idx % 5]
+        col = cols[idx % col_count]
         
         with col:
-            # 🔥 卡片容器 (边距已通过 CSS 调小) 🔥
+            # 🔥 极简卡片：无边距容器 🔥
             with st.container(border=True):
-                # === Row 1: 图片 ===
+                # 1. 图片 (撑满上方)
                 st.image(file_path, use_container_width=True)
-
-                # === Row 2: 大标题 (文件名编辑) ===
-                name_body, ext = os.path.splitext(file_name)
-                new_name_body = st.text_input(
-                    "name",
-                    value=name_body,
-                    key=f"n_{file_name}",
-                    label_visibility="collapsed"
-                )
-                # 重命名逻辑
-                if new_name_body != name_body:
-                    try:
-                        new_full_name = new_name_body + ext
-                        os.rename(file_path, os.path.join("images", new_full_name))
-                        if file_name in st.session_state.selected_assets:
-                            st.session_state.selected_assets.remove(file_name)
-                            st.session_state.selected_assets.add(new_full_name)
-                        st.rerun()
-                    except: pass
-
-                # === Row 3: 操作栏 (选中 + 删除) ===
-                # 使用 columns 将两个按钮并排放在一行
-                c_btn_sel, c_btn_del = st.columns([4, 1]) # 左边给大空间，右边给小空间
+                
+                # 2. 底部操作栏 (无缝拼接)
+                # 左 3 : 右 1 比例
+                c_sel, c_del = st.columns([3, 1], gap="small")
                 
                 is_selected = file_name in st.session_state.selected_assets
                 
-                with c_btn_sel:
-                    # 大按钮：控制选中状态
+                with c_sel:
+                    # 选中按钮
                     if is_selected:
-                        if st.button("✅ SELECTED", key=f"btn_{file_name}", type="primary", use_container_width=True):
+                        if st.button("✅ Active", key=f"s_{file_name}", type="primary", use_container_width=True):
                             st.session_state.selected_assets.remove(file_name)
                             st.rerun()
                     else:
-                        if st.button("⚪ Select", key=f"btn_{file_name}", type="secondary", use_container_width=True):
+                        if st.button("Select", key=f"s_{file_name}", type="secondary", use_container_width=True):
                             st.session_state.selected_assets.add(file_name)
                             st.rerun()
-                            
-                with c_btn_del:
-                    # 小按钮：删除 (用图标表示，节省空间)
-                    if st.button("🗑️", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete Asset"):
+                
+                with c_del:
+                    # 删除按钮
+                    if st.button("🗑", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete"):
                         try:
                             os.remove(file_path)
                             if file_name in st.session_state.selected_assets:
@@ -207,12 +211,12 @@ else:
 with c_stat:
     count = len(st.session_state.selected_assets)
     if count > 0:
-        st.markdown(f"<div style='text-align:right; color:#4CAF50;'>✅ <b>{count}</b> Selected</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:right; color:#4CAF50; padding-top:10px;'>✅ <b>{count}</b> Selected</div>", unsafe_allow_html=True)
 
 st.divider()
 
 # ===========================
-# 5. 生成控制
+# 5. 生成控制区
 # ===========================
 c_lang, c_font, c_qty, c_go = st.columns([1, 1, 0.8, 1])
 with c_lang:
