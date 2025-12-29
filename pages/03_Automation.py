@@ -27,7 +27,7 @@ init_data()
 if "global_queue" not in st.session_state:
     st.session_state.global_queue = []
 
-# 获取全量文本 (换行符拼接)
+# 获取全量文本
 current_queue_text = "\n".join(st.session_state.global_queue)
 
 # ===========================
@@ -60,11 +60,10 @@ if user_input != current_queue_text:
 st.divider()
 
 # ===========================
-# 3. 万能脚本生成逻辑 (🔥 DOM 视觉识别版 🔥)
+# 3. 万能脚本生成逻辑 (🔥 视觉识别 + 10s 缓冲 🔥)
 # ===========================
 if st.button("⚡ Generate Smart Script", type="primary", use_container_width=True):
     
-    # A. 解析任务
     task_list = []
     if user_input:
         raw_lines = user_input.split('\n')
@@ -76,10 +75,9 @@ if st.button("⚡ Generate Smart Script", type="primary", use_container_width=Tr
     if task_list:
         encoded_data = urllib.parse.quote(json.dumps(task_list))
         
-        # --- B. 注入脚本：加入视觉识别逻辑 ---
         js_code = f"""(async function() {{
             console.clear();
-            console.log("%c 🚀 Smart Automation Started (Visual Detection Mode) ", "background: #000; color: #0f0; font-size: 14px");
+            console.log("%c 🚀 Smart Automation Started (Relaxed Mode) ", "background: #000; color: #0f0; font-size: 14px");
             window.kill = false;
             
             const tasks = JSON.parse(decodeURIComponent("{encoded_data}"));
@@ -97,33 +95,26 @@ if st.button("⚡ Generate Smart Script", type="primary", use_container_width=Tr
                 el.style.backgroundColor = color;
             }}
 
-            // --- 2. 视觉检测核心 (DOM Vision) ---
-            // 判断当前页面是否正在生成中
+            // --- 2. 视觉检测 ---
             function isGenerating() {{
-                // A. 查找常见的“停止”按钮 (ChatGPT, Midjourney Web)
+                // A. 停止按钮
                 const stopSelectors = [
                     '[aria-label="Stop generating"]',
                     'button[aria-label="Stop"]',
                     '.stop-button',
-                    'button.btn-danger' // 通用危险按钮
+                    'button.btn-danger'
                 ];
                 for (let s of stopSelectors) {{
                     if (document.querySelector(s)) return true;
                 }}
 
-                // B. 查找进度条或加载状态 (Discord, Midjourney Alpha)
-                // 扫描页面特定区域的文本内容
-                const bodyText = document.body.innerText;
+                // B. 文本关键词 (Discord/MJ)
                 const loadingKeywords = [
-                    "Waiting to start", 
-                    "Generating", 
-                    "(fast)", 
-                    "(relaxed)", 
-                    "0%", "15%", "30%", "60%", "90%" // 粗略进度检测
+                    "Waiting to start", "Generating", "(fast)", "(relaxed)", 
+                    "0%", "15%", "30%", "60%", "90%"
                 ];
                 
-                // 为了防止误判，我们只检查最近更新的区域 (Discord 聊天流底部)
-                // 获取所有消息容器，检查最后一条
+                // 检查最后一条消息
                 const messages = document.querySelectorAll('li[class*="message"], div[class*="message"]');
                 if (messages.length > 0) {{
                     const lastMsg = messages[messages.length - 1].innerText;
@@ -131,12 +122,9 @@ if st.button("⚡ Generate Smart Script", type="primary", use_container_width=Tr
                         if (lastMsg.includes(key)) return true;
                     }}
                 }} else {{
-                    // 如果找不到消息容器，就全局扫描（风险较大，但通用）
-                    // 仅扫描最近 500 个字符的变化
-                    // 这里简化逻辑：如果是 MJ 网页版，通常会有进度条元素
+                    // 全局扫描进度条
                     if (document.querySelector('[role="progressbar"]')) return true;
                 }}
-
                 return false;
             }}
 
@@ -162,7 +150,6 @@ if st.button("⚡ Generate Smart Script", type="primary", use_container_width=Tr
             for (let i = 0; i < tasks.length; i++) {{
                 if (window.kill) {{ showStatus("🛑 Stopped", "#d32f2f"); break; }}
                 
-                // 4.1 等待输入框就绪
                 let box = getInputBox();
                 if (!box) {{
                     showStatus("🔍 Searching for input...", "#ff9800");
@@ -171,21 +158,15 @@ if st.button("⚡ Generate Smart Script", type="primary", use_container_width=Tr
                 }}
 
                 if (box) {{
-                    // 4.2 填入任务
-                    showStatus("✍️ Typing Task " + (i+1), "#1976d2", (i+1)+"/"+tasks.length);
+                    // 输入
+                    showStatus("✍️ Task " + (i+1), "#1976d2", (i+1)+"/"+tasks.length);
                     box.focus();
                     document.execCommand('insertText', false, tasks[i]); 
-                    
-                    // 兜底赋值
-                    if (box.value !== tasks[i] && box.innerText !== tasks[i]) {{
-                         box.value = tasks[i];
-                    }}
-                    
-                    // 触发事件
+                    if (box.value !== tasks[i] && box.innerText !== tasks[i]) {{ box.value = tasks[i]; }}
                     box.dispatchEvent(new Event('input', {{ bubbles: true }}));
                     await new Promise(r => setTimeout(r, 800)); 
 
-                    // 4.3 发送
+                    // 发送
                     let sendBtn = getSendBtn();
                     if (sendBtn && !sendBtn.disabled) {{
                         sendBtn.click();
@@ -193,31 +174,34 @@ if st.button("⚡ Generate Smart Script", type="primary", use_container_width=Tr
                         box.dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }}));
                     }}
                     
-                    // 4.4 🔥 核心：视觉阻塞等待 (Visual Block) 🔥
-                    // 发送后先等 5 秒，让系统反应过来
+                    // 启动视觉阻塞
                     showStatus("⏳ Starting...", "#555");
                     await new Promise(r => setTimeout(r, 5000));
 
                     if (i < tasks.length - 1) {{
                         let busyCount = 0;
-                        let maxWait = 300; // 最多等 5 分钟防止死锁
+                        let maxWait = 600; // 放宽到 10分钟 防止超大图卡死
                         
                         while (true) {{
                             if (window.kill) break;
                             
                             if (isGenerating()) {{
-                                // 发现正在生成！死循环等待
                                 busyCount++;
-                                showStatus("🎨 Generating detected...", "#7b1fa2", "Wait: " + busyCount + "s");
-                                await new Promise(r => setTimeout(r, 2000)); // 每 2 秒检查一次
+                                showStatus("🎨 Generating detected...", "#7b1fa2", busyCount + "s");
+                                await new Promise(r => setTimeout(r, 2000));
                             }} else {{
-                                // 没发现生成？再确认一下（防止闪烁造成的误判）
-                                showStatus("✅ Verifying completion...", "#2e7d32");
+                                // 确认阶段：先等 3秒 看看是不是真的停了
+                                showStatus("✅ Verifying...", "#2e7d32");
                                 await new Promise(r => setTimeout(r, 3000));
                                 
-                                // 再次检查，如果还是没动静，说明真的完了
                                 if (!isGenerating()) {{
-                                    break; // 跳出等待循环，执行下一条
+                                    // 🔥🔥🔥 核心修改：确认完成后，额外强制等待 10秒 🔥🔥🔥
+                                    for (let k = 10; k > 0; k--) {{
+                                        if (window.kill) break;
+                                        showStatus("🍵 Safety Cooldown: " + k + "s", "#4caf50");
+                                        await new Promise(r => setTimeout(r, 1000));
+                                    }}
+                                    break; // 彻底完成，放行下一个
                                 }}
                             }}
                             
@@ -239,7 +223,7 @@ if st.button("⚡ Generate Smart Script", type="primary", use_container_width=Tr
         
         with st.expander("📦 Get Smart Script", expanded=True):
             st.code(js_code, language="javascript")
-        st.caption("Tip: This script now visually scans for 'Progress Bars', 'Stop Buttons', and keywords like 'Waiting to start'. It will NOT proceed until the current image is done.")
+        st.caption("Tip: This script includes a visual detector AND a 10-second safety buffer after each task completes.")
     
     else:
         st.error("❌ Queue is empty.")
