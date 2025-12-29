@@ -1,594 +1,321 @@
 import streamlit as st
-
 import sys
-
 import os
-
 import random
-
 import time
-
 import urllib.parse # 用于URL编码
 
-
-
 # ===========================
-
 # 0. 基础设置
-
 # ===========================
-
 current_dir = os.path.dirname(os.path.abspath(__file__))
-
 parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
-
 if parent_dir not in sys.path:
-
     sys.path.append(parent_dir)
 
-
-
 from engine_manager import init_data, render_sidebar, fetch_image_refs_auto
-
 from style_manager import apply_pro_style
 
-
-
 try:
-
     from streamlit import fragment
-
 except ImportError:
-
     fragment = lambda x: x
 
-
-
 st.set_page_config(layout="wide", page_title="Text Studio")
-
 apply_pro_style()
-
 render_sidebar()
 
-init_data()
-
-
-
 if "uploader_key" not in st.session_state:
-
     st.session_state.uploader_key = 0
 
-
-
 if "selected_assets" not in st.session_state:
-
     st.session_state.selected_assets = set()
 
-
-
 # ===========================
-
-# 1. 核心回调 (Callbacks)
-
+# 🔥 新增：暴力直读函数 (绕过缓存和后缀限制) 🔥
 # ===========================
-
-def toggle_selection(file_name):
-
-    if file_name in st.session_state.selected_assets:
-
-        st.session_state.selected_assets.remove(file_name)
-
-    else:
-
-        st.session_state.selected_assets.add(file_name)
-
-
-
-def delete_asset(file_path, file_name):
+def load_local_text_data_force():
+    """强制扫描 data/text 下所有包含 'text_' 的文件，不管有没有后缀"""
+    data_path = os.path.join(parent_dir, "data", "text")
+    local_db = {}
+    
+    if not os.path.exists(data_path):
+        st.error(f"❌ 错误：找不到路径 {data_path}")
+        return {}
 
     try:
-
-        if os.path.exists(file_path):
-
-            os.remove(file_path)
-
-        if file_name in st.session_state.selected_assets:
-
-            st.session_state.selected_assets.remove(file_name)
-
+        files = os.listdir(data_path)
+        # 只要文件名包含 text_ 就读，不管它是 .txt 还是没后缀
+        target_files = [f for f in files if "text_" in f]
+        
+        for f in target_files:
+            full_path = os.path.join(data_path, f)
+            content = ""
+            try:
+                # 优先尝试 utf-8
+                with open(full_path, "r", encoding="utf-8") as file:
+                    content = file.read()
+            except UnicodeDecodeError:
+                # 如果失败尝试 gbk (防止中文乱码)
+                try:
+                    with open(full_path, "r", encoding="gbk") as file:
+                        content = file.read()
+                except:
+                    continue # 实在读不了就跳过
+            
+            # 按行切割，去除首尾空格，过滤空行
+            words = [line.strip() for line in content.split('\n') if line.strip()]
+            
+            # key 直接用文件名
+            local_db[f] = words
+            
     except Exception as e:
+        st.error(f"读取文件出错: {e}")
+        
+    return local_db
 
+# ===========================
+# 1. 核心回调 (Callbacks)
+# ===========================
+def toggle_selection(file_name):
+    if file_name in st.session_state.selected_assets:
+        st.session_state.selected_assets.remove(file_name)
+    else:
+        st.session_state.selected_assets.add(file_name)
+
+def delete_asset(file_path, file_name):
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        if file_name in st.session_state.selected_assets:
+            st.session_state.selected_assets.remove(file_name)
+    except Exception as e:
         print(f"Delete Error: {e}")
 
-
-
 def toggle_all_selection(all_files_list):
-
     if len(st.session_state.selected_assets) == len(all_files_list) and len(all_files_list) > 0:
-
         st.session_state.selected_assets = set()
-
     else:
-
         st.session_state.selected_assets = set(all_files_list)
 
-
-
 # ===========================
-
 # 2. CSS 样式 (无框 + 蓝色链接)
-
 # ===========================
-
 st.markdown("""
-
 <style>
-
-    /* 上方画廊响应式核心 */
-
     [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 12px !important; }
-
     [data-testid="column"] { min-width: 160px !important; flex: 1 1 160px !important; width: auto !important; max-width: 100% !important; }
-
-
-
-    /* 卡片容器 */
-
-    [data-testid="stVerticalBlockBorderWrapper"] {
-
-        padding: 2px !important; 
-
-        background-color: #0a0a0a;
-
-        border: 1px solid #222;
-
-        border-radius: 8px;
-
-    }
-
+    [data-testid="stVerticalBlockBorderWrapper"] { padding: 2px !important; background-color: #0a0a0a; border: 1px solid #222; border-radius: 8px; }
     [data-testid="stVerticalBlockBorderWrapper"]:hover { border-color: #555; }
-
-
-
-    /* 图片 */
-
     div[data-testid="stImage"] { margin-bottom: 2px !important; }
-
     div[data-testid="stImage"] img { border-radius: 6px !important; width: 100%; display: block; }
-
-
-
-    /* 按钮基础 */
-
     button { width: 100%; border-radius: 6px !important; border: none !important; white-space: nowrap !important; }
-
     button[kind="primary"] { background-color: #1b3a1b !important; border: 1px solid #2e5c2e !important; color: #4CAF50 !important; font-weight: 600 !important; height: 36px !important; }
-
     button[kind="primary"]:hover { background-color: #2e6b2e !important; color: #fff !important; }
-
     button[kind="secondary"] { background-color: #161616 !important; color: #888 !important; height: 36px !important; border: 1px solid #222 !important; }
-
     button[kind="secondary"]:hover { background-color: #222 !important; color: #ccc !important; border-color: #444 !important; }
-
     div[data-testid="column"] button[help="Delete"]:hover { background-color: #330000 !important; color: #ff4444 !important; border-color: #ff4444 !important; }
-
-    
-
     button[title="View fullscreen"] { display: none; }
-
     div[role="radiogroup"] { justify-content: flex-end; }
-
-    
-
-    /* 链接样式优化 */
-
-    .stMarkdown a {
-
-        color: #4da6ff !important; /* 亮蓝色 */
-
-        text-decoration: underline !important; /* 下划线 */
-
-        font-weight: bold !important;
-
-    }
-
+    .stMarkdown a { color: #4da6ff !important; text-decoration: underline !important; font-weight: bold !important; }
 </style>
-
 """, unsafe_allow_html=True)
 
-
-
 # ===========================
-
 # 3. 顶部区域
-
 # ===========================
-
 st.markdown("## Text Studio")
 
-
-
 c_up, c_view = st.columns([2, 1])
-
 with c_up:
-
     uploaded_file = st.file_uploader("Upload", type=['jpg', 'png', 'jpeg', 'webp'], key=f"uploader_{st.session_state.uploader_key}", label_visibility="collapsed")
 
-
-
 with c_view:
-
     layout_mode = st.radio("Layout", ["PC", "Tablet", "Mobile"], horizontal=True, label_visibility="collapsed")
-
     col_map = {"PC": 5, "Tablet": 3, "Mobile": 2}
-
     col_count = col_map[layout_mode]
 
-
-
 if uploaded_file is not None:
-
     save_dir = "images"
-
     if not os.path.exists(save_dir):
-
         os.makedirs(save_dir)
-
     file_path = os.path.join(save_dir, uploaded_file.name)
-
     with open(file_path, "wb") as f:
-
         f.write(uploaded_file.getbuffer())
-
     st.session_state.uploader_key += 1
-
     st.session_state.selected_assets.add(uploaded_file.name)
-
     st.toast(f"✅ Saved")
-
     time.sleep(0.5)
-
     st.rerun()
-
-
 
 st.divider()
 
-
-
 # ===========================
-
 # 4. 局部刷新画廊 (Fragment)
-
 # ===========================
-
 @fragment
-
 def render_gallery_fragment(current_col_count):
-
     c_head, c_ctrl = st.columns([3, 1])
-
     
-
     raw_map = fetch_image_refs_auto()
-
     if not isinstance(raw_map, dict): raw_map = {}
-
     all_files = [v for v in raw_map.values() if v]
-
     full_paths = [(f, os.path.join("images", f)) for f in all_files]
-
     valid_files = [x for x in full_paths if os.path.exists(x[1])]
-
     valid_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
-
     sorted_image_files = [x[0] for x in valid_files]
-
-
 
     st.session_state.selected_assets = {f for f in st.session_state.selected_assets if f in sorted_image_files}
 
-
-
     with c_head:
-
         st.subheader("Visual Library")
-
         
-
     with c_ctrl:
-
         if sorted_image_files:
-
             is_all_selected = (len(st.session_state.selected_assets) == len(sorted_image_files)) and (len(sorted_image_files) > 0)
-
             btn_label = "❌ Uncheck All" if is_all_selected else "✅ Select All"
-
             st.button(btn_label, key="btn_toggle_all", type="secondary", use_container_width=True, on_click=toggle_all_selection, args=(sorted_image_files,))
 
-
-
     if not sorted_image_files:
-
         st.info("Library is empty.")
-
     else:
-
         cols = st.columns(current_col_count)
-
         for idx, file_name in enumerate(sorted_image_files):
-
             file_path = os.path.join("images", file_name)
-
             col = cols[idx % current_col_count]
-
             
-
             with col:
-
                 with st.container(border=True):
-
                     st.image(file_path, use_container_width=True)
-
                     c_sel, c_del = st.columns([3, 1], gap="small")
-
                     is_selected = file_name in st.session_state.selected_assets
-
                     
-
                     with c_sel:
-
                         if is_selected:
-
                             st.button("✅ Active", key=f"s_{file_name}", type="primary", use_container_width=True, on_click=toggle_selection, args=(file_name,))
-
                         else:
-
                             st.button("Select", key=f"s_{file_name}", type="secondary", use_container_width=True, on_click=toggle_selection, args=(file_name,))
-
                     with c_del:
-
                         st.button("🗑", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete", on_click=delete_asset, args=(file_path, file_name))
 
-
-
     if st.session_state.selected_assets:
-
         st.markdown(f"<div style='text-align:right; color:#4CAF50; padding-top:10px;'>✅ <b>{len(st.session_state.selected_assets)}</b> Selected</div>", unsafe_allow_html=True)
-
-
 
 render_gallery_fragment(col_count)
 
-
-
 st.divider()
 
-
-
+# ===========================
+# 5. 生成控制区 (🔥 使用暴力读取的数据 🔥)
 # ===========================
 
-# 5. 生成控制区 (🔥 修正：选语种 -> 选单词 🔥)
+# 每次刷新页面时，现场读取硬盘文件
+local_db = load_local_text_data_force()
 
-# ===========================
-
-db = st.session_state.get("db_all", {})
-
-
-
-# 1. 筛选语种 (查找文件名包含 text_ 的 key)
-
-raw_keys = list(db.keys())
-
-available_langs = [k for k in raw_keys if "text_" in k] 
-
-if not available_langs: available_langs = ["text_en"] # 兜底
-
-
+# 筛选语种 (只要文件名包含 text_ 就行，不再依赖 .txt 后缀)
+available_files = sorted(list(local_db.keys()))
+if not available_files:
+    # 如果实在啥都没读到，给个默认的，防止报错
+    available_files = ["text_en.txt"]
+    local_db["text_en.txt"] = ["LOVE", "HOPE", "FAITH (Demo)"]
 
 c_lang, c_word, c_qty, c_go = st.columns([1, 1, 0.8, 1])
 
-
-
-# 2. 语种选择 (控制加载哪个词库)
-
+# 2. 语种选择 (直接显示文件名，最直观)
 with c_lang:
+    target_file = st.selectbox("Word Bank File", available_files, label_visibility="collapsed")
 
-    target_lang = st.selectbox("Language Bank", available_langs, label_visibility="collapsed")
-
-
-
-# 获取当前语种下的词库列表
-
-current_words_pool = db.get(target_lang, []) or ["LOVE", "HOPE", "FAITH"]
-
-
-
-# 3. 单词选择 (替代了原来的字体选择)
-
+# 3. 单词选择
 with c_word:
-
-    # 选项：第一个是随机，后面跟着具体单词
-
-    # 这样用户既可以选 Random，也可以选具体某个词
-
-    word_options = ["🎲 Random (随机词)"] + current_words_pool
-
+    # 从暴力读取的 local_db 中拿数据
+    current_words_pool = local_db.get(target_file, ["(Empty)"])
+    if not current_words_pool: current_words_pool = ["(Empty File)"]
+    
+    # 显示总词数，方便确认是否读全了
+    word_options = [f"🎲 Random ({len(current_words_pool)} words)"] + current_words_pool
     selected_word_opt = st.selectbox("Pick Word", word_options, label_visibility="collapsed")
 
-
-
 with c_qty:
-
     qty = st.number_input("Qty", 1, 10, 4, label_visibility="collapsed")
-
 with c_go:
-
     run_btn = st.button("🚀 GENERATE", type="primary", use_container_width=True)
-
-
 
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
-
-
 # ===========================
-
-# 6. 生成逻辑 (🔥 修正：去风格 + 纯净Prompt 🔥)
-
+# 6. 生成逻辑 (去风格 + 纯净Prompt)
 # ===========================
-
 if run_btn:
-
     try:
-
         with st.spinner("Processing..."):
-
             results = []
-
             active_pool = list(st.session_state.selected_assets)
-
             
-
-            # GitHub Raw URL 基座
-
             GITHUB_RAW_BASE = "https://raw.githubusercontent.com/losran/Tattoo_Engine_V2/main/images/"
 
-
-
             for i in range(qty):
-
-                # 🔥 1. 确定单词 (优先级：手动输入 > 下拉框指定 > 下拉框随机)
-
+                # 🔥 1. 确定单词
                 if manual_word.strip():
-
                     final_word = manual_word.strip()
-
-                elif selected_word_opt == "🎲 Random (随机词)":
-
-                    final_word = random.choice(current_words_pool)
-
+                elif "Random" in selected_word_opt:
+                    # 过滤掉可能的空占位符
+                    valid_pool = [w for w in current_words_pool if w not in ["(Empty)", "(Empty File)"]]
+                    if valid_pool:
+                        final_word = random.choice(valid_pool)
+                    else:
+                        final_word = "LOVE"
                 else:
-
                     final_word = selected_word_opt
 
-
-
-                # 2. 图片处理 (URL编码 + 拼接)
-
+                # 2. 图片处理
                 img_val = random.choice(active_pool) if active_pool else ""
-
                 full_img_url = ""
-
                 if img_val:
-
                     safe_filename = urllib.parse.quote(img_val)
-
                     full_img_url = f"{GITHUB_RAW_BASE}{safe_filename}"
-
                 
-
                 # 🔥 3. Prompt 构造 (纯净版)
-
-                # 删除了 style keywords，只保留 word + 垫图
-
                 url_part = f"{full_img_url} " if full_img_url else ""
-
                 prefix = f"**方案{i+1}：** "
-
-                
-
-                # 示例: **方案1：** https://... Tattoo design of the word 'LOVE', clean white background...
-
                 prompt_text = f"{prefix}{url_part}Tattoo design of the word '{final_word}', clean white background, high contrast --iw 2 **"
-
                 
-
                 results.append({"image_file": img_val, "prompt_text": prompt_text})
-
             
-
             st.session_state.text_solutions = results
-
             time.sleep(0.3)
-
             st.rerun()
-
             
-
     except Exception as e:
-
         st.error(str(e))
 
-
-
 # ===========================
-
-# 7. 结果展示 (🔥 列表布局 + 无框 + 蓝色链接 🔥)
-
+# 7. 结果展示 (列表布局 + 无框 + 蓝色链接)
 # ===========================
-
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
-
     st.write("") 
-
     st.subheader("Results")
-
     
-
     for idx, item in enumerate(st.session_state.text_solutions):
-
-        # 容器封装每一行
-
         with st.container(border=True):
-
-            # 🔥 列表布局：1份图 : 4份文字
-
             col_img, col_text = st.columns([1, 4])
-
             
-
             with col_img:
-
                 if item["image_file"]:
-
                     full_path = os.path.abspath(os.path.join("images", item["image_file"]))
-
                     if os.path.exists(full_path):
-
                         st.image(full_path, use_container_width=True)
-
             
-
             with col_text:
-
-                # 🔥 Markdown 渲染 (无框，蓝色链接)
-
                 st.markdown(item['prompt_text'])
 
-
-
     st.write("")
-
     if st.button("Import to Automation Queue", type="primary", use_container_width=True):
-
         if "global_queue" not in st.session_state:
-
             st.session_state.global_queue = []
-
         
-
-        # 导出列表 (每一条加换行符，防止粘连)
-
         pure_texts = [item["prompt_text"] + "\n" for item in st.session_state.text_solutions]
-
         st.session_state.global_queue.extend(pure_texts)
-
         
-
         st.toast(f"✅ Imported {len(pure_texts)} tasks to Automation")
-
         time.sleep(1)
-
         st.switch_page("pages/03_Automation.py")
-
