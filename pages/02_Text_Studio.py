@@ -27,91 +27,83 @@ if "selected_assets" not in st.session_state:
     st.session_state.selected_assets = set()
 
 # ===========================
-# 1. CSS 强制响应式补丁
+# 1. 纯净视觉 CSS
 # ===========================
 st.markdown("""
 <style>
-    /* --- 核心：强制列宽和换行 (解决手机端挤压问题) --- */
-    
-    /* 1. 找到所有列的父容器，强制允许换行 */
-    [data-testid="stHorizontalBlock"] {
-        flex-wrap: wrap !important;
-        gap: 12px !important; /* 列与列的间距 */
-    }
-
-    /* 2. 找到每一个单独的列，锁死最小宽度 */
-    [data-testid="column"] {
-        /* 关键：每个列至少要占 160px，否则就换行 */
-        min-width: 160px !important;
-        /* 让列自动填满剩余空间，但不小于 160px */
-        flex: 1 1 160px !important; 
-        /* 覆盖 Streamlit 默认的百分比宽度 */
-        width: auto !important;
-        max-width: 100% !important;
-    }
-
-    /* --- 卡片美化 --- */
+    /* 1. 卡片容器：紧凑化，去内边距 */
     [data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 6px !important; /* 卡片内边距：让图片不贴边 */
-        background-color: #0e0e0e;
+        padding: 0px !important; 
+        background-color: #0a0a0a;
         border: 1px solid #222;
-        border-radius: 6px;
-        margin-bottom: 8px; /* 卡片垂直间距 */
+        overflow: hidden;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"]:hover {
+        border-color: #555;
     }
 
-    /* --- 图片 --- */
-    div[data-testid="stImage"] {
-        margin-bottom: 6px !important; /* 图片和下方元素的距离 */
-    }
-    div[data-testid="stImage"] img {
-        border-radius: 4px !important;
-        width: 100%;
-        display: block;
-    }
-
-    /* --- 按钮组 (无缝拼接风格) --- */
+    /* 2. 按钮优化：填满底部，无缝拼接 */
     button {
-        border: none !important;
+        border-radius: 0px !important;
         margin: 0px !important;
         width: 100%;
-        white-space: nowrap !important;
+        border: none !important;
+        white-space: nowrap !important; /* 防止文字换行 */
     }
-    
-    /* 选中按钮 (左) */
+
+    /* Primary (选中 - 绿色) */
     button[kind="primary"] {
         background-color: #1b3a1b !important;
-        border: 1px solid #2e5c2e !important;
         color: #4CAF50 !important;
-        font-weight: 700 !important;
-        height: 34px !important;
-        border-radius: 4px !important;
+        font-weight: 600 !important;
+        height: 38px !important; /* 稍微加高一点，更好点 */
     }
     button[kind="primary"]:hover {
         background-color: #2e6b2e !important;
         color: #fff !important;
     }
-    
-    /* 未选/删除按钮 (灰) */
+
+    /* Secondary (未选/删除 - 深灰) */
     button[kind="secondary"] {
-        background-color: #1a1a1a !important;
-        border: 1px solid #333 !important;
+        background-color: #111 !important;
         color: #888 !important;
-        height: 34px !important;
-        border-radius: 4px !important;
+        height: 38px !important;
+        border-top: 1px solid #222 !important;
+        border-right: 1px solid #222 !important;
     }
     button[kind="secondary"]:hover {
-        border-color: #666 !important;
+        background-color: #222 !important;
         color: #ccc !important;
     }
-
+    
     /* 删除按钮特定样式 */
-    div[data-testid="column"] button[help="Delete"]:hover {
+    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"] {
+        border-right: none !important;
+    }
+    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"]:hover {
         background-color: #330000 !important;
         color: #ff4444 !important;
-        border-color: #ff4444 !important;
+    }
+
+    /* 3. 图片样式：无缝贴合 */
+    div[data-testid="stImage"] {
+        margin-bottom: -16px !important;
+    }
+    div[data-testid="stImage"] img {
+        border-radius: 0px !important;
+        width: 100%;
+        display: block;
     }
     
-    button[title="View fullscreen"] { display: none; }
+    /* 4. 隐藏 Streamlit 图片全屏按钮 (保持纯净) */
+    button[title="View fullscreen"] {
+        display: none;
+    }
+    
+    /* 5. 布局切换器样式微调 */
+    div[role="radiogroup"] {
+        justify-content: flex-end;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -125,16 +117,38 @@ available_langs = [k for k in raw_keys if k.startswith("Text_")]
 if not available_langs: available_langs = ["Text_English"]
 
 # ===========================
-# 3. 顶部上传
+# 3. 顶部工具栏 (Upload + Layout Control)
 # ===========================
 st.markdown("## Text Studio")
 
-uploaded_file = st.file_uploader(
-    "Upload", 
-    type=['jpg', 'png', 'jpeg', 'webp'],
-    key=f"uploader_{st.session_state.uploader_key}",
-    label_visibility="collapsed"
-)
+c_up, c_view = st.columns([2, 1])
+
+with c_up:
+    uploaded_file = st.file_uploader(
+        "Upload", 
+        type=['jpg', 'png', 'jpeg', 'webp'],
+        key=f"uploader_{st.session_state.uploader_key}",
+        label_visibility="collapsed"
+    )
+
+with c_view:
+    # 🔥 核心升级：三端布局切换器 🔥
+    # 使用 Radio 横向排列，直观切换
+    layout_mode = st.radio(
+        "Layout", 
+        ["PC", "Tablet", "Mobile"], 
+        horizontal=True, 
+        index=0, # 默认 PC
+        label_visibility="collapsed"
+    )
+    
+    # 映射逻辑
+    col_map = {
+        "PC": 5,      # 5列：高密度
+        "Tablet": 3,  # 3列：中密度
+        "Mobile": 2   # 2列：巨型卡片
+    }
+    col_count = col_map[layout_mode]
 
 if uploaded_file is not None:
     save_dir = "images"
@@ -154,12 +168,13 @@ if uploaded_file is not None:
 st.divider()
 
 # ===========================
-# 4. 自动响应式画廊
+# 4. 视觉画廊 (Visual Gallery)
 # ===========================
 c_head, c_stat = st.columns([3, 1])
 with c_head:
     st.subheader("Visual Library")
 
+# 获取图片
 raw_map = fetch_image_refs_auto()
 if not isinstance(raw_map, dict): raw_map = {}
 all_files = [v for v in raw_map.values() if v]
@@ -168,46 +183,46 @@ valid_files = [x for x in full_paths if os.path.exists(x[1])]
 valid_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
 sorted_image_files = [x[0] for x in valid_files]
 
+# 清理无效选中
 st.session_state.selected_assets = {f for f in st.session_state.selected_assets if f in sorted_image_files}
 
 if not sorted_image_files:
     st.info("Library is empty.")
 else:
-    # 🔥 核心布局：依然使用 6 列 🔥
-    # 但由于上面的 CSS 强制了 min-width: 160px，
-    # 在手机上这 6 列会自动折叠成 3 行 (每行2列)，实现自动响应。
-    NUM_COLS = 6
-    cols = st.columns(NUM_COLS)
+    # 动态列数
+    cols = st.columns(col_count)
     
     for idx, file_name in enumerate(sorted_image_files):
-        # 瀑布流逻辑：垂直分发
-        col_index = idx % NUM_COLS
         file_path = os.path.join("images", file_name)
+        col = cols[idx % col_count]
         
-        with cols[col_index]:
+        with col:
+            # 极简卡片容器
             with st.container(border=True):
                 # 1. 图片
                 st.image(file_path, use_container_width=True)
                 
-                # 2. 按钮区 (Grid Layout)
+                # 2. 底部操作栏 (选中 | 删除)
+                # 比例保持 3:1，确保选中按钮够大
                 c_sel, c_del = st.columns([3, 1], gap="small")
                 
                 is_selected = file_name in st.session_state.selected_assets
                 
                 with c_sel:
+                    # 选中按钮 (简化文字，适应小屏)
                     if is_selected:
-                        # 选中态：绿色 Active
+                        # 选中态：绿色
                         if st.button("✅ Active", key=f"s_{file_name}", type="primary", use_container_width=True):
                             st.session_state.selected_assets.remove(file_name)
                             st.rerun()
                     else:
-                        # 未选态：灰色 Select
+                        # 未选态：灰色
                         if st.button("Select", key=f"s_{file_name}", type="secondary", use_container_width=True):
                             st.session_state.selected_assets.add(file_name)
                             st.rerun()
                 
                 with c_del:
-                    # 删除按钮
+                    # 删除按钮 (仅图标)
                     if st.button("🗑", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete"):
                         try:
                             os.remove(file_path)
