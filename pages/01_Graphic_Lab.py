@@ -1,7 +1,18 @@
 import streamlit as st
+import sys
+import os
 import random
 import time
 from openai import OpenAI
+
+# ===========================
+# 0. 路径修复 (确保能找到根目录模块)
+# ===========================
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
 from engine_manager import init_data, render_sidebar
 from style_manager import apply_pro_style
 
@@ -21,7 +32,7 @@ if "DEEPSEEK_KEY" in st.secrets:
         pass
 
 # ===========================
-# 2. 辅助函数
+# 2. 核心引擎 (零件组装)
 # ===========================
 def smart_pick(category):
     db = st.session_state.get("db_all", {})
@@ -30,7 +41,7 @@ def smart_pick(category):
     return ""
 
 def assemble_skeleton(user_input):
-    """秒级组装骨架"""
+    """秒级组装骨架 - 100% 还原你的零件逻辑"""
     subject = user_input if user_input.strip() else smart_pick("Subject")
     
     parts = [
@@ -44,6 +55,7 @@ def assemble_skeleton(user_input):
         f"{smart_pick('Mood')} vibe"
     ]
     
+    # 混沌点缀
     if random.random() > 0.6:
         parts.append(f"with {smart_pick('Accent')} details")
         
@@ -52,20 +64,21 @@ def assemble_skeleton(user_input):
 # ===========================
 # 3. 界面交互
 # ===========================
-st.title("Graphic Lab")
+st.markdown("## 🎨 Graphic Lab")
+st.caption("Auto-Assembly -> AI Polish -> Batch Handoff")
 
 c1, c2 = st.columns([3, 1])
 with c1:
-    user_in = st.text_input("Core Subject", placeholder="Leave empty for Blind Box mode...")
+    user_in = st.text_input("Core Subject", placeholder="Leave empty for Blind Box mode...", label_visibility="collapsed")
 with c2:
-    qty = st.number_input("Batch Size", 1, 8, 4)
+    qty = st.number_input("Batch Size", 1, 8, 4, label_visibility="collapsed")
 
 # ===========================
-# 4. 执行逻辑
+# 4. 执行逻辑 (AI 润色堡垒)
 # ===========================
 if st.button("Generate", type="primary", use_container_width=True):
     
-    st.session_state.graphic_solutions = [] # 改名：graphic专用，互不干扰
+    st.session_state.graphic_solutions = [] 
     placeholders = []   
     skeletons = []      
     
@@ -79,21 +92,27 @@ if st.button("Generate", type="primary", use_container_width=True):
         skeletons.append(sk)
         
         with ph.container(border=True):
-            st.markdown(f"**Option {idx}:** {sk}")
-            st.caption("✨ AI is thinking...") 
+            st.markdown(f"**方案{idx}：** {sk}")
+            st.caption("✨ 资深策展人正在润色文案...") 
     
-    # --- 第二阶段：流式润色 ---
-    sys_prompt = "You are a tattoo art director. Refine the keywords into a high-quality Midjourney prompt."
+    # --- 第二阶段：流式润色 (还原调教逻辑) ---
+    # 🔴 核心修改：还原你的 sys_prompt
+    sys_prompt = "你是一位资深刺青策展人。请将提供的关键词组合润色为极具艺术感的纹身描述。每段必须出现'纹身'二字。"
+    
     final_results = []
 
     for i, sk in enumerate(skeletons):
         idx = i + 1
         ph = placeholders[i]
         
+        # 🔴 核心修改：还原你的 user_prompt (含锚点与字数要求)
         user_prompt = f"""
-        Raw Keywords: {sk}
-        Task: Write a descriptive Midjourney prompt (40-60 words).
-        Start EXACTLY with "**Option {idx}:**".
+        【原始骨架】：{sk}
+        
+        【指令】：
+        1. 必须严格保留骨架中的风格、颜色、部位等关键信息。
+        2. 必须严格以 "**方案{idx}：**" 开头 (双星号+全角冒号)。这是自动化识别的锚点。
+        3. 输出一段 50-80 字的完整视觉描述。
         """
         
         full_response = ""
@@ -104,15 +123,20 @@ if st.button("Generate", type="primary", use_container_width=True):
                 if client:
                     stream = client.chat.completions.create(
                         model="deepseek-chat",
-                        messages=[{"role": "system", "content": sys_prompt},{"role": "user", "content": user_prompt}],
-                        temperature=0.9,
+                        messages=[
+                            {"role": "system", "content": sys_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        temperature=0.85, # 还原高采样率
                         stream=True 
                     )
                     full_response = st.write_stream(stream)
-                    if not full_response.startswith("**"):
-                        full_response = f"**Option {idx}:** {full_response}"
+                    # 强校验锚点
+                    if not full_response.startswith("**方案"):
+                        full_response = f"**方案{idx}：** {full_response}"
                 else:
-                    dummy = f"**Option {idx}:** {sk} (Offline Mode)"
+                    # 离线模拟
+                    dummy = f"**方案{idx}：** {sk} (AI Offline)"
                     def dummy_stream():
                         for w in dummy.split(" "):
                             yield w + " "
@@ -122,12 +146,9 @@ if st.button("Generate", type="primary", use_container_width=True):
         except Exception as e:
             ph.empty()
             with ph.container(border=True):
-                err_msg = str(e)
-                note = "Connection Error"
-                if "401" in err_msg: note = "Invalid API Key"
-                st.markdown(f"**Option {idx}:** {sk}")
-                st.markdown(f":red[⚠️ {note} - Using Raw Data]")
-                full_response = f"**Option {idx}:** {sk} ({note})"
+                st.markdown(f"**方案{idx}：** {sk}")
+                st.markdown(f":red[⚠️ 润色失败 - {str(e)}]")
+                full_response = f"**方案{idx}：** {sk}"
 
         final_results.append(full_response)
 
@@ -139,7 +160,7 @@ if st.button("Generate", type="primary", use_container_width=True):
 # ===========================
 if "graphic_solutions" in st.session_state and st.session_state.graphic_solutions:
     st.markdown("---")
-    st.subheader("Final Output")
+    st.subheader("📦 Ready for Automation")
     
     for sol in st.session_state.graphic_solutions:
         with st.container(border=True):
@@ -148,21 +169,19 @@ if "graphic_solutions" in st.session_state and st.session_state.graphic_solution
     c_send, c_clear = st.columns([3, 1])
     
     with c_send:
-        # 🟢 核心修改：叠加逻辑 🟢
-        if st.button("Add to Automation Queue (叠加发送)", type="primary", use_container_width=True):
-            # 1. 初始化全局购物车
+        if st.button("🚀 Send ALL to Automation Pipeline (叠加)", type="primary", use_container_width=True):
             if "global_queue" not in st.session_state:
                 st.session_state.global_queue = []
             
-            # 2. 将当前生成的方案“追加”进去，而不是覆盖
+            # 叠加发送逻辑
             st.session_state.global_queue.extend(st.session_state.graphic_solutions)
             
-            # 3. 跳转
-            st.toast(f"已添加 {len(st.session_state.graphic_solutions)} 个方案到队列！")
-            time.sleep(0.5)
+            st.toast(f"✅ 已添加 {len(st.session_state.graphic_solutions)} 组方案至自动化队列")
+            time.sleep(0.8)
+            # 注意：请确保你的自动化文件名与此处一致
             st.switch_page("pages/03_🚀_Automation.py")
             
     with c_clear:
-        if st.button("Clear Results", use_container_width=True):
+        if st.button("🗑️ Clear Results", use_container_width=True):
             st.session_state.graphic_solutions = []
             st.rerun()
