@@ -36,9 +36,8 @@ if "selected_assets" not in st.session_state:
     st.session_state.selected_assets = set()
 
 # ===========================
-# 1. 核心回调 (Callbacks)
+# 1. 回调函数 (Callbacks)
 # ===========================
-
 def toggle_selection(file_name):
     if file_name in st.session_state.selected_assets:
         st.session_state.selected_assets.remove(file_name)
@@ -55,7 +54,7 @@ def delete_asset(file_path, file_name):
         print(f"Delete Error: {e}")
 
 # ===========================
-# 2. CSS 样式
+# 2. CSS 样式 (保留画廊样式，移除结果区Grid样式)
 # ===========================
 st.markdown("""
 <style>
@@ -63,7 +62,7 @@ st.markdown("""
     [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 12px !important; }
     [data-testid="column"] { min-width: 160px !important; flex: 1 1 160px !important; width: auto !important; max-width: 100% !important; }
 
-    /* 卡片容器 */
+    /* 画廊卡片 */
     [data-testid="stVerticalBlockBorderWrapper"] {
         padding: 2px !important; 
         background-color: #0a0a0a;
@@ -79,42 +78,15 @@ st.markdown("""
     /* 按钮基础 */
     button { width: 100%; border-radius: 6px !important; border: none !important; white-space: nowrap !important; }
 
-    /* 选中态 (绿) */
-    button[kind="primary"] {
-        background-color: #1b3a1b !important;
-        border: 1px solid #2e5c2e !important;
-        color: #4CAF50 !important;
-        font-weight: 600 !important;
-        height: 36px !important;
-    }
+    /* 按钮颜色 */
+    button[kind="primary"] { background-color: #1b3a1b !important; border: 1px solid #2e5c2e !important; color: #4CAF50 !important; font-weight: 600 !important; height: 36px !important; }
     button[kind="primary"]:hover { background-color: #2e6b2e !important; color: #fff !important; }
-
-    /* 未选态 (灰) */
-    button[kind="secondary"] {
-        background-color: #161616 !important;
-        color: #888 !important;
-        height: 36px !important;
-        border: 1px solid #222 !important;
-    }
+    button[kind="secondary"] { background-color: #161616 !important; color: #888 !important; height: 36px !important; border: 1px solid #222 !important; }
     button[kind="secondary"]:hover { background-color: #222 !important; color: #ccc !important; border-color: #444 !important; }
-    
-    /* 删除按钮红光 */
-    div[data-testid="column"] button[help="Delete"]:hover {
-        background-color: #330000 !important;
-        color: #ff4444 !important;
-        border-color: #ff4444 !important;
-    }
+    div[data-testid="column"] button[help="Delete"]:hover { background-color: #330000 !important; color: #ff4444 !important; border-color: #ff4444 !important; }
     
     button[title="View fullscreen"] { display: none; }
     div[role="radiogroup"] { justify-content: flex-end; }
-    
-    /* 结果区文本框优化 */
-    div[data-testid="stTextArea"] textarea {
-        font-size: 12px !important;
-        background-color: #111 !important;
-        color: #aaa !important;
-        border: 1px solid #333 !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -153,16 +125,14 @@ if uploaded_file is not None:
 st.divider()
 
 # ===========================
-# 4. 局部刷新画廊 (Fragment)
+# 4. 局部刷新画廊
 # ===========================
-
 @fragment
 def render_gallery_fragment(current_col_count):
     c_head, c_stat = st.columns([3, 1])
     with c_head:
         st.subheader("Visual Library")
 
-    # 获取数据
     raw_map = fetch_image_refs_auto()
     if not isinstance(raw_map, dict): raw_map = {}
     all_files = [v for v in raw_map.values() if v]
@@ -192,7 +162,6 @@ def render_gallery_fragment(current_col_count):
                             st.button("✅ Active", key=f"s_{file_name}", type="primary", use_container_width=True, on_click=toggle_selection, args=(file_name,))
                         else:
                             st.button("Select", key=f"s_{file_name}", type="secondary", use_container_width=True, on_click=toggle_selection, args=(file_name,))
-                    
                     with c_del:
                         st.button("🗑", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete", on_click=delete_asset, args=(file_path, file_name))
 
@@ -225,7 +194,7 @@ with c_go:
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
 # ===========================
-# 6. 生成逻辑 (🔥 核心修复：绝对路径 + 数据结构 🔥)
+# 6. 生成逻辑 (🔥 修复核心：绝对路径计算 🔥)
 # ===========================
 if run_btn:
     try:
@@ -242,14 +211,14 @@ if run_btn:
                 
                 if active_pool:
                     img_val = random.choice(active_pool)
-                    # 🔥 修复 1：计算绝对路径 (Absolute Path)
-                    # 这样 Automation 脚本才能找到文件并上传
-                    # parent_dir 是项目根目录，images 是根目录下的文件夹
-                    full_img_path = os.path.abspath(os.path.join(parent_dir, "images", img_val))
+                    # 🔥 绝对路径计算 (Windows/Mac 通用)
+                    # os.getcwd() 获取当前工作目录，拼接 images 目录
+                    # 这会生成类似 C:\Project\images\abc.png 的路径
+                    full_img_path = os.path.abspath(os.path.join(os.getcwd(), "images", img_val))
                 
                 font = selected_font if selected_font != "Random" else random.choice(font_list)
                 
-                # 🔥 修复 2：将绝对路径拼接到 Prompt 开头
+                # 🔥 Prompt 拼接：路径放在最前面，确保 Automation 识别到文件指令
                 url_part = f"{full_img_path} " if full_img_path else ""
                 prompt_text = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2"
                 
@@ -259,6 +228,7 @@ if run_btn:
                 })
             
             st.session_state.text_solutions = results
+            # 为了确保结果显示出来，这里必须 rerun
             time.sleep(0.3)
             st.rerun()
             
@@ -266,52 +236,40 @@ if run_btn:
         st.error(str(e))
 
 # ===========================
-# 7. 结果展示 (🔥 核心修复：方案封装 + 卡片化 🔥)
+# 7. 结果展示 (🔥 UI回滚：列表样式 🔥)
 # ===========================
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
     st.write("") 
     st.subheader("Results")
     
-    # 🔥 使用与画廊一致的 Grid 布局来封装结果 🔥
-    # 这里我们复用 col_count 确保在各端都好看
-    res_cols = st.columns(col_count) 
-    
+    # 回归到你喜欢的“左图右文”列表样式，清晰明了
     for idx, item in enumerate(st.session_state.text_solutions):
-        col = res_cols[idx % col_count]
-        
-        with col:
-            # 方案封装：使用卡片包裹
-            with st.container(border=True):
-                # 1. 图片预览
+        with st.container(border=True):
+            col_img, col_text = st.columns([1, 4]) # 1:4 比例，左图右文
+            
+            with col_img:
                 if item["image_file"]:
-                    # 这里依然计算显示用的路径
                     full_path = os.path.abspath(os.path.join("images", item["image_file"]))
                     if os.path.exists(full_path):
                         st.image(full_path, use_container_width=True)
-                
-                # 2. Prompt 文本 (封装在卡片内)
-                st.text_area(
-                    "Prompt",
-                    value=item['prompt_text'],
-                    height=100,
-                    key=f"res_{idx}",
-                    label_visibility="collapsed"
-                )
+            
+            with col_text:
+                # 使用 Code 块或 TextArea 显示 Prompt，方便复制查看
+                st.code(item['prompt_text'], language="bash")
 
     st.write("")
-    st.divider()
     
     # 底部导入按钮
     if st.button("Import to Automation Queue", type="primary", use_container_width=True):
         if "global_queue" not in st.session_state:
             st.session_state.global_queue = []
         
-        # 导出纯文本 Prompt (包含路径)
-        pure_texts = [item["prompt_text"] for item in st.session_state.text_solutions]
+        # 🔥 关键：将 Prompt 列表逐条加入队列
+        # 这样 Automation 页面接收到的就是 ["Prompt A", "Prompt B", ...] 
+        # 而不是一坨合并的文本
+        new_tasks = [item["prompt_text"] for item in st.session_state.text_solutions]
+        st.session_state.global_queue.extend(new_tasks)
         
-        # 🔥 修复 3：确保是 List Extend，让自动化识别为多条任务
-        st.session_state.global_queue.extend(pure_texts)
-        
-        st.toast(f"✅ Imported {len(pure_texts)} tasks to Automation")
+        st.toast(f"✅ Imported {len(new_tasks)} tasks to Automation")
         time.sleep(1)
         st.switch_page("pages/03_Automation.py")
