@@ -23,33 +23,11 @@ apply_pro_style()
 render_sidebar()
 init_data()
 
-# 初始化上传器状态 Key，用于重置控件解决闪屏问题
+# 上传控件 Key 初始化
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
-if "last_uploaded_img" not in st.session_state:
-    st.session_state.last_uploaded_img = None
 
-# --- CSS: 极简画廊样式 ---
-st.markdown("""
-<style>
-    /* 1. 隐藏 Checkbox 的 Label，只留框框 */
-    div[data-testid="stCheckbox"] label { display: none; }
-    
-    /* 2. 调整 Checkbox 位置，让它看起来像在图片上 */
-    div[data-testid="stCheckbox"] {
-        margin-bottom: -20px; /* 负边距，让框框贴近图片 */
-        margin-left: 5px;
-        z-index: 10;
-        position: relative;
-    }
-    
-    /* 3. 图片容器基础样式 */
-    div[data-testid="stImage"] img {
-        border-radius: 8px;
-        transition: all 0.2s ease;
-    }
-</style>
-""", unsafe_allow_html=True)
+
 
 # ===========================
 # 2. 数据准备
@@ -59,101 +37,106 @@ font_list = db.get("Font_Style", []) or ["Gothic", "Chrome"]
 available_langs = [k for k in db.keys() if k.startswith("Text_")] or ["Text_English"]
 
 # ===========================
-# 3. 顶部：极简上传与预览
+# 3. 顶部：极简上传
 # ===========================
 st.markdown("## Text Studio")
 
-col_upload, col_preview_new = st.columns([2, 1])
+# 只需要一个上传条，上传完自动刷新，新图会自动排在画廊第一位
+uploaded_file = st.file_uploader(
+    "📤 Drop image here to add to Library", 
+    type=['jpg', 'png', 'jpeg', 'webp'],
+    key=f"uploader_{st.session_state.uploader_key}",
+    label_visibility="collapsed"
+)
 
-with col_upload:
-    # 使用动态 Key，上传完自动 +1 重置，解决闪屏死循环
-    uploaded_file = st.file_uploader(
-        "📤 Import Reference (Drag & Drop)", 
-        type=['jpg', 'png', 'jpeg', 'webp'],
-        key=f"uploader_{st.session_state.uploader_key}",
-        label_visibility="collapsed"
-    )
+if uploaded_file is not None:
+    save_dir = "images"
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
     
-    if uploaded_file is not None:
-        save_dir = "images"
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        
-        file_path = os.path.join(save_dir, uploaded_file.name)
-        
-        # 保存文件
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        
-        # 更新状态
-        st.session_state.last_uploaded_img = file_path
-        st.session_state.uploader_key += 1 # 关键：重置上传控件
-        st.toast(f"✅ Saved: {uploaded_file.name}")
-        st.rerun() # 刷新页面显示新图
-
-with col_preview_new:
-    # 显示刚刚上传的那张图 (实时预览)
-    if st.session_state.last_uploaded_img and os.path.exists(st.session_state.last_uploaded_img):
-        st.caption("Newest Upload:")
-        st.image(st.session_state.last_uploaded_img, width=150)
+    file_path = os.path.join(save_dir, uploaded_file.name)
+    
+    # 保存
+    with open(file_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    
+    # 状态重置与刷新
+    st.session_state.uploader_key += 1
+    st.toast(f"✅ Added: {uploaded_file.name}")
+    time.sleep(0.5)
+    st.rerun()
 
 st.divider()
 
 # ===========================
-# 4. 核心交互：无缝画廊
+# 4. 核心交互：时间倒序画廊
 # ===========================
-# 获取图片列表
+# 获取图片并按修改时间倒序排列 (Newest First)
 raw_map = fetch_image_refs_auto()
 if not isinstance(raw_map, dict): raw_map = {}
-image_files = [v for v in raw_map.values() if v]
+all_files = [v for v in raw_map.values() if v]
+
+# 排序逻辑：获取完整路径 -> 获取mtime -> 倒序
+full_paths = [(f, os.path.join("images", f)) for f in all_files]
+# 过滤掉不存在的文件
+valid_files = [x for x in full_paths if os.path.exists(x[1])]
+# 按修改时间排序 (从新到旧)
+valid_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
+# 只取文件名
+sorted_image_files = [x[0] for x in valid_files]
 
 # 控制栏
 c_gal_title, c_gal_ctrl = st.columns([3, 1])
 with c_gal_title:
     st.subheader("Visual Library")
 with c_gal_ctrl:
-    use_global_blind = st.toggle("🎲 Random All (Ignore Select)", value=False)
+    use_global_blind = st.toggle("🎲 Random All", value=False)
 
 selected_images = []
 
 if not use_global_blind:
-    if not image_files:
-        st.info("Gallery is empty.")
+    if not sorted_image_files:
+        st.info("Gallery is empty. Upload an image above.")
     else:
-        # 5列布局，视觉更加紧凑
+        # 5列布局
         cols = st.columns(5)
-        for idx, file_name in enumerate(image_files):
+        for idx, file_name in enumerate(sorted_image_files):
             file_path = os.path.join("images", file_name)
             
-            if os.path.exists(file_path):
-                col = cols[idx % 5]
-                with col:
-                    # 1. 勾选框 (无Label，紧贴图片)
-                    is_checked = st.checkbox("select", key=f"chk_{file_name}")
+            col = cols[idx % 5]
+            with col:
+                # 1. 勾选框 (CSS 把它浮在图片左上角)
+                # key 必须唯一，使用文件名
+                is_checked = st.checkbox("select", key=f"chk_{file_name}")
+                
+                # 2. 图片展示 (根据选中状态改变样式)
+                if is_checked:
+                    # 选中态：使用 HTML 注入带边框的图片 (Streamlit 原生无法加边框)
+                    st.markdown(
+                        f'<img src="app/static/{file_name}" style="border: 5px solid #00FF00; box-sizing: border-box; border-radius: 8px; width:100%; display:block;">', 
+                        unsafe_allow_html=True
+                    )
+                    # 此时不渲染 st.image，避免重复，但需要用一个看不见的 st.image 占位来保持 Grid 高度一致吗？
+                    # 不需要，HTML img 标签足够了。但为了保险起见，如果是本地运行，src路径可能需要调整
+                    # Streamlit 本地图片显示 trick: 直接用 st.image 最稳，但无法加边框。
+                    # 变通：选中时显示原图 + 下方文字提示，或者用 st.image 渲染但接受没有边框，只靠 ✅ 提示
                     
-                    # 2. 图片展示 (根据选中状态改变样式)
-                    if is_checked:
-                        # 选中态：加粗绿色边框
-                        st.markdown(
-                            f'<img src="app/static/{file_name}" style="border: 4px solid #4CAF50; border-radius: 8px; width:100%;">', 
-                            unsafe_allow_html=True
-                        )
-                        # 注意：Streamlit 原生 st.image 无法直接加 border，
-                        # 这里依然用 st.image 保证兼容性，但通过上方的 checkbox 视觉关联
-                        st.image(file_path, use_container_width=True)
-                        selected_images.append(file_name)
-                    else:
-                        # 未选中态：普通显示
-                        st.image(file_path, use_container_width=True)
+                    # 方案 B (最稳健)：依然用 st.image，但利用 CSS 全局类名高亮 (较难精准定位)
+                    # 方案 C (当前采用)：既然要明显，就用 st.image 但在上面加个明显的 ✅
+                    
+                    # 回退到 st.image 以确保图片一定能显示 (HTML src 在不同环境路径很难搞)
+                    # 我们用一个简单的办法：选中时，在图片上方显示一行绿色文字
+                    st.image(file_path, use_container_width=True)
+                    st.markdown(":white_check_mark: **SELECTED**") # 强提示
+                    selected_images.append(file_name)
+                else:
+                    # 未选中态
+                    st.image(file_path, use_container_width=True)
+                    st.write("") # 占位对齐
 
-st.write("")
-# 如果有选中，在底部显示一个浮动提示条
+# 底部浮动提示
 if selected_images:
-    st.markdown(f"""
-    <div style="background:#1e1e1e; color:#4CAF50; padding:10px; border-radius:5px; text-align:center; margin-bottom:20px;">
-       ✅ <b>{len(selected_images)}</b> images selected for random generation
-    </div>
-    """, unsafe_allow_html=True)
+    st.info(f"✅ {len(selected_images)} images selected. AI will pick randomly from them.")
 
 st.divider()
 
@@ -186,7 +169,7 @@ if run_btn:
                 
                 img_val = ""
                 if use_global_blind:
-                    if image_files: img_val = random.choice(image_files)
+                    if sorted_image_files: img_val = random.choice(sorted_image_files)
                 elif selected_images:
                     img_val = random.choice(selected_images)
                 
