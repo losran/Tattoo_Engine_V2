@@ -34,12 +34,10 @@ if not available_langs: available_langs = ["Text_English"]
 
 font_list = db.get("Font_Style", []) or ["Gothic", "Chrome"]
 
-# 🔥 核心修复点：允许本地图片通过 🔥
+# 获取图片数据
 raw_map = fetch_image_refs_auto()
 if not isinstance(raw_map, dict): raw_map = {}
-
-# ❌ 之前的错误：ref_map = {k: v for k, v in raw_map.items() if ... and v.startswith("http")}
-# ✅ 现在的正确写法：只要有值(v)就可以，不需要必须是 http 开头
+# 只要有值就保留 (本地图片文件名)
 ref_map = {k: v for k, v in raw_map.items() if v}
 
 BLIND_BOX_OPTION = "🎲 Blind Box (Random)"
@@ -47,19 +45,36 @@ BLIND_BOX_OPTION = "🎲 Blind Box (Random)"
 if not ref_map:
     ref_options = ["(No Images Available)"]
 else:
-    # 将字典的 key (也就是带文件夹图标的名字) 转为列表
     ref_options = [BLIND_BOX_OPTION] + list(ref_map.keys())
 
 # ===========================
-# 3. 顶部控制台
+# 3. 顶部控制台 (带略缩图预览)
 # ===========================
 st.markdown("## Text Studio")
 
-c1, c2, c3 = st.columns(3)
+# 使用 columns 来放置选择框和预览图
+c1, c2_select, c2_preview, c3 = st.columns([3, 2, 1, 3])
+
 with c1:
     target_lang = st.selectbox("Language Source", available_langs)
-with c2:
-    selected_ref = st.selectbox("Reference Style", ref_options)
+
+with c2_select:
+    selected_ref_key = st.selectbox("Reference Style", ref_options)
+
+# 🔥 新增：略缩图预览区域 🔥
+with c2_preview:
+    # 如果选中的不是盲盒，且在映射表中存在，就显示预览图
+    if selected_ref_key != BLIND_BOX_OPTION and selected_ref_key in ref_map:
+        img_filename = ref_map[selected_ref_key]
+        # 拼接完整的本地路径
+        img_path = os.path.join("images", img_filename)
+        if os.path.exists(img_path):
+            # 显示一个小略缩图 (width控制大小)
+            st.image(img_path, width=80, caption="Preview")
+    else:
+        # 盲盒或无图时显示占位
+        st.write("")
+
 with c3:
     selected_font = st.selectbox("Font Style", ["Random"] + font_list)
 
@@ -77,50 +92,38 @@ with c_btn:
     run_btn = st.button("Generate", type="primary", use_container_width=True)
 
 # ===========================
-# 5. 生成逻辑
+# 5. 生成逻辑 (数据结构升级)
 # ===========================
 if run_btn:
+    # 🔥 重要修改：results 不再是纯字符串列表，而是字典列表，存储图片和咒语的对应关系
     results = []
     words_pool = db.get(target_lang, []) or ["LOVE", "HOPE"]
 
     for i in range(qty):
         word = manual_word if manual_word else random.choice(words_pool)
         
-        img_val = "" # 这里存的是具体的文件名或URL
+        img_val = "" 
         
-        # 逻辑：从 ref_map 中取值
-        if selected_ref == BLIND_BOX_OPTION:
-            # 盲盒：随机抽一个 value
+        # 确定使用的图片文件名
+        if selected_ref_key == BLIND_BOX_OPTION:
             valid_vals = list(ref_map.values())
             if valid_vals: img_val = random.choice(valid_vals)
-        elif selected_ref in ref_map:
-            # 指定：直接取 value
-            img_val = ref_map.get(selected_ref, "")
+        elif selected_ref_key in ref_map:
+            img_val = ref_map.get(selected_ref_key, "")
         
         font = selected_font if selected_font != "Random" else random.choice(font_list)
         
         # 组装 Prompt
-        # 如果 img_val 是本地文件名 (不含http)，我们只作为文本参考放进去，或者需要你手动上传
-        # 这里直接拼接到 Prompt 前面
         url_part = f"{img_val} " if img_val else ""
+        prompt_text = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2"
         
-        prompt = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2"
-        results.append(prompt)
+        # 🔥 将图片文件名和生成的文本一起存入结果中 🔥
+        results.append({
+            "image_file": img_val, # 用于在 Text Studio 展示
+            "prompt_text": prompt_text # 用于发送给自动化
+        })
 
     st.session_state.text_solutions = results
 
 # ===========================
-# 6. 结果展示
-# ===========================
-if "text_solutions" in st.session_state and st.session_state.text_solutions:
-    st.write("") 
-    for res in st.session_state.text_solutions:
-        with st.container(border=True):
-            st.code(res, language="markdown")
-
-    st.write("")
-    if st.button("Import to Automation Queue", use_container_width=True):
-        if "global_queue" not in st.session_state:
-            st.session_state.global_queue = []
-        st.session_state.global_queue.extend(st.session_state.text_solutions)
-        st.switch_page("pages/03_Automation.py")
+# 6. 结果展示 (图文并茂)
