@@ -171,7 +171,7 @@ if st.button("⚡ Generate Smart Script (Button Lock)", type="primary", use_cont
                             }} else {{
                                 // 如果检测到空闲 (IDLE)，开始累积“稳定值”
                                 stabilityCounter++;
-                                let remaining = 10 - stabilityCounter; // 目标：连续 10 秒空闲
+                                let remaining = 30 - stabilityCounter; // 目标：连续 10 秒空闲
                                 
                                 if (remaining > 0) {{
                                     showStatus("✅ Verifying Completion...", "#2e7d32", "Confirming in " + remaining + "s...");
