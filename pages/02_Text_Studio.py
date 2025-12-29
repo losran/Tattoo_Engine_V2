@@ -5,7 +5,7 @@ import random
 import time
 
 # ===========================
-# 0. 基础设置
+# 0. 基础设置与局部刷新补丁
 # ===========================
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
@@ -14,6 +14,15 @@ if parent_dir not in sys.path:
 
 from engine_manager import init_data, render_sidebar, fetch_image_refs_auto
 from style_manager import apply_pro_style
+
+# 🔥 核心修改：尝试导入 fragment 用于局部刷新 🔥
+try:
+    from streamlit import fragment
+except ImportError:
+    try:
+        from streamlit import experimental_fragment as fragment
+    except ImportError:
+        fragment = lambda x: x # 兼容旧版本
 
 st.set_page_config(layout="wide", page_title="Text Studio")
 apply_pro_style()
@@ -27,16 +36,16 @@ if "selected_assets" not in st.session_state:
     st.session_state.selected_assets = set()
 
 # ===========================
-# 1. 样式调整 (此处调节间距)
+# 1. 样式调整 (保持你喜欢的 2px 紧凑间距)
 # ===========================
 st.markdown("""
 <style>
     /* 1. 卡片容器：增加内边距 */
     [data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 2px !important; /* 👈 这里调节【卡片边框距离】 (0px -> 10px) */
+        padding: 2px !important; 
         background-color: #0a0a0a;
         border: 1px solid #222;
-        border-radius: 8px; /* 卡片本身圆角 */
+        border-radius: 8px;
     }
     [data-testid="stVerticalBlockBorderWrapper"]:hover {
         border-color: #555;
@@ -44,10 +53,10 @@ st.markdown("""
 
     /* 2. 图片：调整与下方按钮的距离 */
     div[data-testid="stImage"] {
-        margin-bottom: 2px !important; /* 👈 这里调节【图与按钮的间距】 (-16px -> 8px) */
+        margin-bottom: 2px !important;
     }
     div[data-testid="stImage"] img {
-        border-radius: 6px !important; /* 图片圆角 */
+        border-radius: 6px !important;
         width: 100%;
         display: block;
     }
@@ -55,7 +64,7 @@ st.markdown("""
     /* 3. 按钮优化：不再贴底，而是作为独立元素 */
     button {
         width: 100%;
-        border-radius: 6px !important; /* 按钮恢复圆角 */
+        border-radius: 6px !important;
         border: none !important;
         white-space: nowrap !important;
     }
@@ -74,10 +83,10 @@ st.markdown("""
 
     /* Secondary (未选/删除 - 深灰) */
     button[kind="secondary"] {
-        background-color: #161616 !important; /* 稍微亮一点的灰 */
+        background-color: #161616 !important;
         color: #888 !important;
         height: 36px !important;
-        border: 1px solid #222 !important; /* 加回边框让它更像按钮 */
+        border: 1px solid #222 !important;
     }
     button[kind="secondary"]:hover {
         background-color: #222 !important;
@@ -114,7 +123,7 @@ available_langs = [k for k in raw_keys if k.startswith("Text_")]
 if not available_langs: available_langs = ["Text_English"]
 
 # ===========================
-# 3. 顶部工具栏
+# 3. 顶部工具栏 (全局区域)
 # ===========================
 st.markdown("## Text Studio")
 
@@ -129,7 +138,7 @@ with c_up:
     )
 
 with c_view:
-    # 布局切换器
+    # 布局切换器 (这个切换会触发全局刷新，这是对的，因为布局变了)
     layout_mode = st.radio(
         "Layout", 
         ["PC", "Tablet", "Mobile"], 
@@ -159,75 +168,85 @@ if uploaded_file is not None:
 st.divider()
 
 # ===========================
-# 4. 视觉画廊 (Visual Gallery)
+# 4. 视觉画廊 (局部刷新区域)
 # ===========================
-c_head, c_stat = st.columns([3, 1])
-with c_head:
-    st.subheader("Visual Library")
 
-# 获取图片
-raw_map = fetch_image_refs_auto()
-if not isinstance(raw_map, dict): raw_map = {}
-all_files = [v for v in raw_map.values() if v]
-full_paths = [(f, os.path.join("images", f)) for f in all_files]
-valid_files = [x for x in full_paths if os.path.exists(x[1])]
-valid_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
-sorted_image_files = [x[0] for x in valid_files]
+# 🔥 核心修改：将画廊渲染封装到 fragment 中 🔥
+@fragment
+def render_gallery_fragment(current_col_count):
+    c_head, c_stat = st.columns([3, 1])
+    with c_head:
+        st.subheader("Visual Library")
 
-st.session_state.selected_assets = {f for f in st.session_state.selected_assets if f in sorted_image_files}
+    # 获取图片
+    raw_map = fetch_image_refs_auto()
+    if not isinstance(raw_map, dict): raw_map = {}
+    all_files = [v for v in raw_map.values() if v]
+    full_paths = [(f, os.path.join("images", f)) for f in all_files]
+    valid_files = [x for x in full_paths if os.path.exists(x[1])]
+    valid_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
+    sorted_image_files = [x[0] for x in valid_files]
 
-if not sorted_image_files:
-    st.info("Library is empty.")
-else:
-    cols = st.columns(col_count)
-    
-    for idx, file_name in enumerate(sorted_image_files):
-        file_path = os.path.join("images", file_name)
-        col = cols[idx % col_count]
+    # 清理无效选中
+    st.session_state.selected_assets = {f for f in st.session_state.selected_assets if f in sorted_image_files}
+
+    if not sorted_image_files:
+        st.info("Library is empty.")
+    else:
+        # 使用传入的 col_count 进行布局
+        cols = st.columns(current_col_count)
         
-        with col:
-            # 卡片容器 (带 10px 内边距)
-            with st.container(border=True):
-                # 1. 图片 (带 8px 下边距)
-                st.image(file_path, use_container_width=True)
-                
-                # 2. 底部操作栏 (分离式按钮)
-                c_sel, c_del = st.columns([3, 1], gap="small")
-                
-                is_selected = file_name in st.session_state.selected_assets
-                
-                with c_sel:
-                    # 选中按钮
-                    if is_selected:
-                        if st.button("✅ Active", key=f"s_{file_name}", type="primary", use_container_width=True):
-                            st.session_state.selected_assets.remove(file_name)
-                            st.rerun()
-                    else:
-                        if st.button("Select", key=f"s_{file_name}", type="secondary", use_container_width=True):
-                            st.session_state.selected_assets.add(file_name)
-                            st.rerun()
-                
-                with c_del:
-                    # 删除按钮
-                    if st.button("🗑", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete"):
-                        try:
-                            os.remove(file_path)
-                            if file_name in st.session_state.selected_assets:
+        for idx, file_name in enumerate(sorted_image_files):
+            file_path = os.path.join("images", file_name)
+            col = cols[idx % current_col_count]
+            
+            with col:
+                # 卡片容器 (带 10px 内边距)
+                with st.container(border=True):
+                    # 1. 图片 (带 8px 下边距)
+                    st.image(file_path, use_container_width=True)
+                    
+                    # 2. 底部操作栏 (分离式按钮)
+                    c_sel, c_del = st.columns([3, 1], gap="small")
+                    
+                    is_selected = file_name in st.session_state.selected_assets
+                    
+                    with c_sel:
+                        # 选中按钮
+                        if is_selected:
+                            if st.button("✅ Active", key=f"s_{file_name}", type="primary", use_container_width=True):
                                 st.session_state.selected_assets.remove(file_name)
-                            st.rerun()
-                        except: pass
+                                st.rerun() # 这里的 rerun 只会刷新 fragment
+                        else:
+                            if st.button("Select", key=f"s_{file_name}", type="secondary", use_container_width=True):
+                                st.session_state.selected_assets.add(file_name)
+                                st.rerun() # 这里的 rerun 只会刷新 fragment
+                    
+                    with c_del:
+                        # 删除按钮
+                        if st.button("🗑", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete"):
+                            try:
+                                os.remove(file_path)
+                                if file_name in st.session_state.selected_assets:
+                                    st.session_state.selected_assets.remove(file_name)
+                                st.rerun()
+                            except: pass
 
-# 状态统计
-with c_stat:
-    count = len(st.session_state.selected_assets)
-    if count > 0:
-        st.markdown(f"<div style='text-align:right; color:#4CAF50; padding-top:10px;'>✅ <b>{count}</b> Selected</div>", unsafe_allow_html=True)
+    # 状态统计 (实时更新)
+    with c_stat:
+        count = len(st.session_state.selected_assets)
+        if count > 0:
+            st.markdown(f"<div style='text-align:right; color:#4CAF50; padding-top:10px;'>✅ <b>{count}</b> Selected</div>", unsafe_allow_html=True)
+
+# 🔥 调用局部刷新函数，传入当前布局列数 🔥
+render_gallery_fragment(col_count)
 
 st.divider()
 
 # ===========================
-# 5. 生成控制区
+# 5. 生成控制区 (全局区域)
 # ===========================
+# 注意：session_state 是全局共享的，所以这里能读到 fragment 里选中的图片
 c_lang, c_font, c_qty, c_go = st.columns([1, 1, 0.8, 1])
 with c_lang:
     target_lang = st.selectbox("Lang", available_langs, label_visibility="collapsed")
