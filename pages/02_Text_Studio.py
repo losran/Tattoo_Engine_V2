@@ -27,89 +27,107 @@ if "selected_assets" not in st.session_state:
     st.session_state.selected_assets = set()
 
 # ===========================
-# 1. CSS 魔法：实现真·自适应布局
+# 1. 核心 CSS：实现自动换行的瀑布流
 # ===========================
 st.markdown("""
 <style>
-    /* --- 1. 核心：强制 flex 容器自动换行 --- */
-    /* 找到包含 columns 的水平块，允许它换行 */
+    /* 1. 强制列容器允许换行 (关键) */
     [data-testid="stHorizontalBlock"] {
         flex-wrap: wrap !important;
+        align-items: flex-start !important; /* 顶部对齐，形成瀑布流错落感 */
     }
 
-    /* --- 2. 核心：定义列的“最小身位” --- */
-    /* 告诉浏览器：无论你想怎么排，每个列至少给我留 140px 的宽度 */
+    /* 2. 设定列的“底线”宽度 */
     [data-testid="column"] {
-        min-width: 140px !important;  /* 手机上正好能放下2个 (360px屏) */
-        flex: 1 1 auto !important;    /* 允许自动拉伸占满剩余空间 */
-        max-width: 100% !important;   /* 防止被 Streamlit 强制锁死宽度 */
+        min-width: 140px !important;  /* 手机上正好放下2列 */
+        flex: 1 1 auto !important;    /* 允许拉伸填满空隙 */
+        max-width: 100% !important;   /* 解除最大宽度限制 */
     }
 
-    /* --- 3. 卡片容器美化 --- */
+    /* 3. 卡片样式：紧凑、黑底 */
     [data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 0px !important; 
+        padding: 0px !important;
         background-color: #0a0a0a;
         border: 1px solid #222;
         overflow: hidden;
+        margin-bottom: 12px; /* 卡片之间的垂直间距 */
     }
     [data-testid="stVerticalBlockBorderWrapper"]:hover {
-        border-color: #555;
+        border-color: #666;
     }
 
-    /* --- 4. 按钮优化 --- */
-    button {
-        border-radius: 0px !important;
-        margin: 0px !important;
-        width: 100%;
-        border: none !important;
-        white-space: nowrap !important;
-    }
-
-    /* Primary (选中 - 绿色) */
-    button[kind="primary"] {
-        background-color: #1b3a1b !important;
-        color: #4CAF50 !important;
-        font-weight: 600 !important;
-        height: 38px !important;
-    }
-    button[kind="primary"]:hover {
-        background-color: #2e6b2e !important;
-        color: #fff !important;
-    }
-
-    /* Secondary (未选/删除 - 深灰) */
-    button[kind="secondary"] {
-        background-color: #111 !important;
-        color: #888 !important;
-        height: 38px !important;
-        border-top: 1px solid #222 !important;
-        border-right: 1px solid #222 !important;
-    }
-    button[kind="secondary"]:hover {
-        background-color: #222 !important;
-        color: #ccc !important;
-    }
-    
-    /* 删除按钮特定样式 */
-    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"] {
-        border-right: none !important;
-    }
-    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"]:hover {
-        background-color: #330000 !important;
-        color: #ff4444 !important;
-    }
-
-    /* 图片样式 */
+    /* 4. 图片：无缝 */
     div[data-testid="stImage"] {
-        margin-bottom: -16px !important;
+        margin-bottom: 0px !important;
     }
     div[data-testid="stImage"] img {
         border-radius: 0px !important;
         width: 100%;
         display: block;
     }
+
+    /* 5. 标题(文件名)优化 */
+    div[data-testid="stTextInput"] {
+        padding: 4px 0px;
+        background-color: #0e0e0e;
+    }
+    div[data-testid="stTextInput"] input {
+        background-color: transparent !important;
+        border: none !important;
+        color: #eee !important;
+        font-size: 13px !important; /* 字体加大 */
+        font-weight: 600 !important; /* 加粗 */
+        text-align: center;
+        height: 28px !important;
+    }
+    div[data-testid="stTextInput"] input:focus {
+        background-color: #222 !important;
+    }
+
+    /* 6. 按钮组：无缝拼接 */
+    button {
+        border-radius: 0px !important;
+        border: none !important;
+        margin: 0px !important;
+        width: 100%;
+        white-space: nowrap !important; /* 禁止文字换行 */
+    }
     
+    /* 选中按钮 (左) */
+    button[kind="primary"] {
+        background-color: #1b3a1b !important;
+        color: #4CAF50 !important;
+        font-weight: 700 !important;
+        height: 38px !important;
+    }
+    button[kind="primary"]:hover {
+        background-color: #2e6b2e !important;
+        color: #fff !important;
+    }
+    
+    button[kind="secondary"] {
+        background-color: #111 !important;
+        color: #888 !important;
+        height: 38px !important;
+        border-top: 1px solid #222 !important;
+    }
+    button[kind="secondary"]:hover {
+        background-color: #222 !important;
+        color: #ddd !important;
+    }
+
+    /* 删除按钮 (右) */
+    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"] {
+        border-left: 1px solid #222 !important;
+    }
+    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"]:hover {
+        background-color: #330000 !important;
+        color: #ff4444 !important;
+    }
+    
+    /* 隐藏全屏按钮 */
     button[title="View fullscreen"] { display: none; }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -152,7 +170,7 @@ if uploaded_file is not None:
 st.divider()
 
 # ===========================
-# 4. 自动流画廊 (Auto-Flow Gallery)
+# 4. 自动瀑布流画廊 (Masonry Gallery)
 # ===========================
 c_head, c_stat = st.columns([3, 1])
 with c_head:
@@ -172,61 +190,69 @@ st.session_state.selected_assets = {f for f in st.session_state.selected_assets 
 if not sorted_image_files:
     st.info("Library is empty.")
 else:
-    # 🔥 核心逻辑：这里我们不再手动控制列数 🔥
-    # 我们设定一个固定的、足够大的“基准列数”（比如 5）。
-    # CSS 会根据 min-width 强制它们换行。
-    # 比如在手机上，虽然 Python 给了 5 列，但 CSS 强迫它们每行只能放 2 个，
-    # 于是 5 个列就会变成：[1,2] [3,4] [5] 这样的 3 行排列。
+    # 🔥 核心逻辑：创建 6 个固定的垂直列 🔥
+    # Python 负责垂直分发 (Masonry Logic)
+    # CSS 负责水平折叠 (Responsive Logic)
     
-    BASE_COLS = 5 # 基准列数
+    NUM_COLS = 6
+    cols = st.columns(NUM_COLS)
     
-    # 我们需要手动切分列表，因为 CSS wrap 只是在每一行(Row)内部 wrap。
-    # 为了保证流式布局，我们不能每 5 个图就开一个新的 st.columns (否则手机上会变成很多个 2行的块)。
-    # 最完美的做法是：创建一个巨大的列容器？不行，Streamlit不支持。
-    # 妥协做法：每行处理 BASE_COLS 个图片。
-    # 在 PC 上，这是一行。
-    # 在手机上，这一行会自动折叠成 2-3 行。
-    # 视觉上完全是连贯的瀑布流。
-    
-    for i in range(0, len(sorted_image_files), BASE_COLS):
-        # 取出这一批次的图片
-        batch = sorted_image_files[i : i + BASE_COLS]
+    for idx, file_name in enumerate(sorted_image_files):
+        # 算法：依次把图片放入第 0, 1, 2, 3, 4, 5 列，然后循环
+        # 这样每一列都会积累图片，形成垂直堆叠
+        col_index = idx % NUM_COLS
+        file_path = os.path.join("images", file_name)
         
-        # 创建容器，注意：如果 batch 只有 1 个，我们也要创建 5 列，保持宽度一致
-        cols = st.columns(BASE_COLS)
-        
-        for idx, file_name in enumerate(batch):
-            file_path = os.path.join("images", file_name)
-            col = cols[idx] # 对应列
-            
-            with col:
-                with st.container(border=True):
-                    # 1. 图片
-                    st.image(file_path, use_container_width=True)
-                    
-                    # 2. 底部栏
-                    c_sel, c_del = st.columns([3, 1], gap="small")
-                    
-                    is_selected = file_name in st.session_state.selected_assets
-                    
-                    with c_sel:
-                        if is_selected:
-                            if st.button("✅ Active", key=f"s_{file_name}", type="primary", use_container_width=True):
+        with cols[col_index]:
+            # === 卡片开始 ===
+            with st.container(border=True):
+                # 1. 图片
+                st.image(file_path, use_container_width=True)
+                
+                # 2. 标题 (文件名) - 可编辑
+                name_body, ext = os.path.splitext(file_name)
+                new_name_body = st.text_input(
+                    "n",
+                    value=name_body,
+                    key=f"n_{file_name}",
+                    label_visibility="collapsed"
+                )
+                if new_name_body != name_body:
+                    try:
+                        new_full_name = new_name_body + ext
+                        os.rename(file_path, os.path.join("images", new_full_name))
+                        if file_name in st.session_state.selected_assets:
+                            st.session_state.selected_assets.remove(file_name)
+                            st.session_state.selected_assets.add(new_full_name)
+                        st.rerun()
+                    except: pass
+                
+                # 3. 操作栏
+                c_sel, c_del = st.columns([3, 1], gap="small")
+                
+                is_selected = file_name in st.session_state.selected_assets
+                
+                with c_sel:
+                    # 选中按钮
+                    if is_selected:
+                        if st.button("✅ Active", key=f"s_{file_name}", type="primary", use_container_width=True):
+                            st.session_state.selected_assets.remove(file_name)
+                            st.rerun()
+                    else:
+                        if st.button("Select", key=f"s_{file_name}", type="secondary", use_container_width=True):
+                            st.session_state.selected_assets.add(file_name)
+                            st.rerun()
+                
+                with c_del:
+                    # 删除按钮
+                    if st.button("🗑", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete"):
+                        try:
+                            os.remove(file_path)
+                            if file_name in st.session_state.selected_assets:
                                 st.session_state.selected_assets.remove(file_name)
-                                st.rerun()
-                        else:
-                            if st.button("Select", key=f"s_{file_name}", type="secondary", use_container_width=True):
-                                st.session_state.selected_assets.add(file_name)
-                                st.rerun()
-                    
-                    with c_del:
-                        if st.button("🗑", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete"):
-                            try:
-                                os.remove(file_path)
-                                if file_name in st.session_state.selected_assets:
-                                    st.session_state.selected_assets.remove(file_name)
-                                st.rerun()
-                            except: pass
+                            st.rerun()
+                        except: pass
+            # === 卡片结束 ===
 
 # 状态统计
 with c_stat:
