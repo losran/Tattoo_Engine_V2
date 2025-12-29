@@ -16,28 +16,37 @@ from engine_manager import init_data, render_sidebar, fetch_image_refs_auto
 from style_manager import apply_pro_style
 
 # ===========================
-# 1. 初始化与样式增强
+# 1. 初始化与 CSS 魔法
 # ===========================
 st.set_page_config(layout="wide", page_title="Text Studio")
 apply_pro_style()
 render_sidebar()
 init_data()
 
-# --- CSS 魔法：让选中的图片有视觉反馈 ---
+# 初始化上传器状态 Key，用于重置控件解决闪屏问题
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+if "last_uploaded_img" not in st.session_state:
+    st.session_state.last_uploaded_img = None
+
+# --- CSS: 极简画廊样式 ---
 st.markdown("""
 <style>
-    /* 隐藏部分不需要的 Label 空间 */
-    div[data-testid="stCheckbox"] label { min-height: 0px; }
+    /* 1. 隐藏 Checkbox 的 Label，只留框框 */
+    div[data-testid="stCheckbox"] label { display: none; }
     
-    /* 选中的图片容器样式微调 (Streamlit 限制，只能做辅助提示) */
-    .selected-img {
-        border: 3px solid #00ff00;
-        border-radius: 8px;
-        opacity: 1.0;
+    /* 2. 调整 Checkbox 位置，让它看起来像在图片上 */
+    div[data-testid="stCheckbox"] {
+        margin-bottom: -20px; /* 负边距，让框框贴近图片 */
+        margin-left: 5px;
+        z-index: 10;
+        position: relative;
     }
-    .unselected-img {
-        opacity: 0.7;
-        filter: grayscale(30%);
+    
+    /* 3. 图片容器基础样式 */
+    div[data-testid="stImage"] img {
+        border-radius: 8px;
+        transition: all 0.2s ease;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -50,17 +59,20 @@ font_list = db.get("Font_Style", []) or ["Gothic", "Chrome"]
 available_langs = [k for k in db.keys() if k.startswith("Text_")] or ["Text_English"]
 
 # ===========================
-# 3. 顶部：上传与直接预览
+# 3. 顶部：极简上传与预览
 # ===========================
 st.markdown("## Text Studio")
 
-# 布局：左边上传，右边显示刚上传的图
-col_up, col_prev = st.columns([1, 1])
+col_upload, col_preview_new = st.columns([2, 1])
 
-with col_up:
-    st.subheader("1. Import Reference")
-    # 直接展示上传控件，去掉折叠框
-    uploaded_file = st.file_uploader("Upload Image to Warehouse", type=['jpg', 'png', 'jpeg', 'webp'])
+with col_upload:
+    # 使用动态 Key，上传完自动 +1 重置，解决闪屏死循环
+    uploaded_file = st.file_uploader(
+        "📤 Import Reference (Drag & Drop)", 
+        type=['jpg', 'png', 'jpeg', 'webp'],
+        key=f"uploader_{st.session_state.uploader_key}",
+        label_visibility="collapsed"
+    )
     
     if uploaded_file is not None:
         save_dir = "images"
@@ -68,93 +80,110 @@ with col_up:
             os.makedirs(save_dir)
         
         file_path = os.path.join(save_dir, uploaded_file.name)
+        
+        # 保存文件
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         
-        st.success(f"Saved: {uploaded_file.name}")
-        # 强制刷新以更新画廊
-        time.sleep(0.5)
-        st.rerun()
+        # 更新状态
+        st.session_state.last_uploaded_img = file_path
+        st.session_state.uploader_key += 1 # 关键：重置上传控件
+        st.toast(f"✅ Saved: {uploaded_file.name}")
+        st.rerun() # 刷新页面显示新图
 
-with col_prev:
-    if uploaded_file:
-        st.subheader("Preview")
-        st.image(uploaded_file, width=200, caption="Newly Added")
-    else:
-        # 占位符，保持布局不塌陷
-        st.write("") 
+with col_preview_new:
+    # 显示刚刚上传的那张图 (实时预览)
+    if st.session_state.last_uploaded_img and os.path.exists(st.session_state.last_uploaded_img):
+        st.caption("Newest Upload:")
+        st.image(st.session_state.last_uploaded_img, width=150)
 
 st.divider()
 
 # ===========================
-# 4. 核心交互：沉浸式画廊
+# 4. 核心交互：无缝画廊
 # ===========================
+# 获取图片列表
 raw_map = fetch_image_refs_auto()
 if not isinstance(raw_map, dict): raw_map = {}
 image_files = [v for v in raw_map.values() if v]
 
-c_gal_title, c_gal_ctrl = st.columns([2, 1])
+# 控制栏
+c_gal_title, c_gal_ctrl = st.columns([3, 1])
 with c_gal_title:
-    st.subheader("2. Select Visual Style")
+    st.subheader("Visual Library")
 with c_gal_ctrl:
-    use_global_blind = st.toggle("🎲 Global Blind Box (Random All)", value=False)
+    use_global_blind = st.toggle("🎲 Random All (Ignore Select)", value=False)
 
 selected_images = []
 
 if not use_global_blind:
     if not image_files:
-        st.info("No images in warehouse. Upload one above.")
+        st.info("Gallery is empty.")
     else:
-        # 网格布局
+        # 5列布局，视觉更加紧凑
         cols = st.columns(5)
         for idx, file_name in enumerate(image_files):
             file_path = os.path.join("images", file_name)
             
             if os.path.exists(file_path):
-                with cols[idx % 5]:
-                    # 状态管理：检查当前是否被选中
-                    is_checked = st.checkbox(f"{file_name}", key=f"chk_{file_name}", label_visibility="collapsed")
+                col = cols[idx % 5]
+                with col:
+                    # 1. 勾选框 (无Label，紧贴图片)
+                    is_checked = st.checkbox("select", key=f"chk_{file_name}")
                     
-                    # 视觉反馈逻辑
+                    # 2. 图片展示 (根据选中状态改变样式)
                     if is_checked:
-                        st.markdown("✅ **ACTIVE**") # 选中标记
-                        st.image(file_path, use_container_width=True) # 原图
+                        # 选中态：加粗绿色边框
+                        st.markdown(
+                            f'<img src="app/static/{file_name}" style="border: 4px solid #4CAF50; border-radius: 8px; width:100%;">', 
+                            unsafe_allow_html=True
+                        )
+                        # 注意：Streamlit 原生 st.image 无法直接加 border，
+                        # 这里依然用 st.image 保证兼容性，但通过上方的 checkbox 视觉关联
+                        st.image(file_path, use_container_width=True)
                         selected_images.append(file_name)
                     else:
-                        st.image(file_path, use_container_width=True) # 普通图
-                        # 这是一个极小的“Select”文字，辅助点击
-                        st.caption("Select")
+                        # 未选中态：普通显示
+                        st.image(file_path, use_container_width=True)
 
-        if selected_images:
-            st.success(f"Selected {len(selected_images)} references.")
+st.write("")
+# 如果有选中，在底部显示一个浮动提示条
+if selected_images:
+    st.markdown(f"""
+    <div style="background:#1e1e1e; color:#4CAF50; padding:10px; border-radius:5px; text-align:center; margin-bottom:20px;">
+       ✅ <b>{len(selected_images)}</b> images selected for random generation
+    </div>
+    """, unsafe_allow_html=True)
 
 st.divider()
 
 # ===========================
-# 5. 底部操作区
+# 5. 底部操作区 (极简)
 # ===========================
-st.subheader("3. Configuration")
-
-c_lang, c_font, c_qty = st.columns([1, 1, 1])
+c_lang, c_font, c_qty, c_go = st.columns([1, 1, 0.8, 1])
 with c_lang:
-    target_lang = st.selectbox("Language Source", available_langs)
+    target_lang = st.selectbox("Lang", available_langs, label_visibility="collapsed")
 with c_font:
-    selected_font = st.selectbox("Font Style", ["Random"] + font_list)
+    selected_font = st.selectbox("Font", ["Random"] + font_list, label_visibility="collapsed")
 with c_qty:
-    qty = st.number_input("Batch Qty", 1, 10, 4)
+    qty = st.number_input("Qty", 1, 10, 4, label_visibility="collapsed")
+with c_go:
+    run_btn = st.button("🚀 GENERATE", type="primary", use_container_width=True)
 
-manual_word = st.text_input("Custom Text (Optional)", placeholder="Leave empty for random words...")
+manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
-if st.button("🚀 Generate Designs", type="primary", use_container_width=True):
+# ===========================
+# 6. 生成逻辑
+# ===========================
+if run_btn:
     try:
-        with st.spinner("Designing..."):
+        with st.spinner("Processing..."):
             results = []
             words_pool = db.get(target_lang, []) or ["LOVE", "HOPE"]
 
             for i in range(qty):
                 word = manual_word.strip() if manual_word.strip() else random.choice(words_pool)
                 
-                # 图片逻辑
                 img_val = ""
                 if use_global_blind:
                     if image_files: img_val = random.choice(image_files)
@@ -172,18 +201,18 @@ if st.button("🚀 Generate Designs", type="primary", use_container_width=True):
                 })
             
             st.session_state.text_solutions = results
-            time.sleep(0.5)
+            time.sleep(0.3)
             st.rerun()
             
     except Exception as e:
-        st.error(f"Error: {str(e)}")
+        st.error(str(e))
 
 # ===========================
-# 6. 结果展示
+# 7. 结果展示
 # ===========================
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
     st.write("") 
-    st.subheader("📦 Result Gallery")
+    st.subheader("Gallery Results")
     
     for item in st.session_state.text_solutions:
         with st.container(border=True):
@@ -194,17 +223,12 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
                     full_path = os.path.abspath(os.path.join("images", item["image_file"]))
                     if os.path.exists(full_path):
                         st.image(full_path, use_container_width=True)
-                    else:
-                        st.caption("Img Missing")
-                else:
-                    st.caption("No Ref")
             
             with col_text:
-                st.markdown("**Prompt:**")
-                st.markdown(f"{item['prompt_text']}")
+                st.markdown(f"**Prompt:** {item['prompt_text']}")
 
     st.write("")
-    if st.button("Import All to Automation Queue", type="primary", use_container_width=True):
+    if st.button("Import to Automation", type="primary", use_container_width=True):
         if "global_queue" not in st.session_state:
             st.session_state.global_queue = []
         pure_texts = [item["prompt_text"] for item in st.session_state.text_solutions]
