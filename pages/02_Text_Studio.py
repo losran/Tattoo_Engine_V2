@@ -23,21 +23,23 @@ init_data()
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
+# 🌟 核心：初始化选中集合 (Set) 来记录选中的文件名 🌟
+if "selected_assets" not in st.session_state:
+    st.session_state.selected_assets = set()
+
 # ===========================
-# 1. 纯装饰性 CSS (不影响点击)
+# 1. 样式微调
 # ===========================
 st.markdown("""
 <style>
-    /* 1. 文件名输入框：去边框，扁平化，像文字一样 */
+    /* 1. 文件名输入框：极简风格 */
     div[data-testid="stTextInput"] input {
         background-color: transparent !important;
         border: 1px solid #222 !important;
-        border-radius: 4px;
         color: #888 !important;
-        font-size: 12px !important;
-        padding: 4px 8px !important;
-        height: 30px !important;
+        font-size: 11px !important;
         text-align: center;
+        height: 28px !important;
     }
     div[data-testid="stTextInput"] input:focus {
         border-color: #555 !important;
@@ -45,45 +47,52 @@ st.markdown("""
         background-color: #111 !important;
     }
 
-    /* 2. 删除按钮：红色边框，警示感 */
+    /* 2. 按钮样式优化 */
+    /* Primary 按钮 (选中态) -> 绿色 */
+    button[kind="primary"] {
+        background-color: #1a331a !important;
+        border-color: #2e5c2e !important;
+        color: #4CAF50 !important;
+        font-weight: bold !important;
+    }
+    button[kind="primary"]:hover {
+        background-color: #2e5c2e !important;
+        color: #fff !important;
+    }
+
+    /* Secondary 按钮 (删除) -> 红色微光 */
     button[kind="secondary"] {
-        border: 1px solid #331111 !important;
-        color: #662222 !important;
-        background: transparent !important;
-        font-size: 12px !important;
-        height: 30px !important;
-        margin-top: 5px !important;
+        border-color: #331111 !important;
+        color: #552222 !important;
+        font-size: 11px !important;
     }
     button[kind="secondary"]:hover {
         border-color: #ff4444 !important;
         color: #ff4444 !important;
-        background-color: #220505 !important;
+        background-color: #220000 !important;
     }
     
-    /* 3. 复选框容器微调 */
-    div[data-testid="stCheckbox"] {
-        padding-top: 2px;
-    }
-    
-    /* 4. 卡片容器边框微调 */
+    /* 3. 卡片容器 */
     [data-testid="stVerticalBlockBorderWrapper"] {
         border-color: #222;
-        background-color: #050505;
+        background-color: #080808;
+    }
+    
+    /* 4. 图片贴合 */
+    div[data-testid="stImage"] img {
+        border-radius: 4px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ===========================
-# 2. 数据准备 (修复 NameError)
+# 2. 数据准备
 # ===========================
 db = st.session_state.get("db_all", {})
 font_list = db.get("Font_Style", []) or ["Gothic", "Chrome"]
-
-# 修复逻辑：先获取 keys，再做列表推导，最后兜底
 raw_keys = list(db.keys())
 available_langs = [k for k in raw_keys if k.startswith("Text_")]
-if not available_langs:
-    available_langs = ["Text_English"] # 绝对兜底
+if not available_langs: available_langs = ["Text_English"]
 
 # ===========================
 # 3. 顶部上传
@@ -107,6 +116,8 @@ if uploaded_file is not None:
         f.write(uploaded_file.getbuffer())
     
     st.session_state.uploader_key += 1
+    # 新上传的图默认选中
+    st.session_state.selected_assets.add(uploaded_file.name)
     st.toast(f"✅ Saved")
     time.sleep(0.5)
     st.rerun()
@@ -114,7 +125,7 @@ if uploaded_file is not None:
 st.divider()
 
 # ===========================
-# 4. 核心：原生布局画廊
+# 4. 核心：全宽按钮交互画廊
 # ===========================
 c_head, c_stat = st.columns([3, 1])
 with c_head:
@@ -129,12 +140,12 @@ valid_files = [x for x in full_paths if os.path.exists(x[1])]
 valid_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
 sorted_image_files = [x[0] for x in valid_files]
 
-selected_images = []
+# 清理：移除不存在于当前文件夹的选中项 (防止Bug)
+st.session_state.selected_assets = {f for f in st.session_state.selected_assets if f in sorted_image_files}
 
 if not sorted_image_files:
     st.info("Library is empty.")
 else:
-    # 5列布局
     cols = st.columns(5)
     
     for idx, file_name in enumerate(sorted_image_files):
@@ -142,54 +153,59 @@ else:
         col = cols[idx % 5]
         
         with col:
-            # 🔥 每一张图一个独立的卡片容器 🔥
             with st.container(border=True):
-                
-                # --- Layer 1: 选择区 (Row 1) ---
-                # 使用 columns 将复选框和状态分开
-                c_chk, c_lbl = st.columns([1, 2])
-                with c_chk:
-                    # 原生复选框，绝对能点
-                    is_checked = st.checkbox("sel", key=f"chk_{file_name}", label_visibility="collapsed")
-                with c_lbl:
-                    if is_checked:
-                        st.markdown(":white_check_mark: **Active**")
-                    else:
-                        st.caption("Select") # 占位，保持对齐
-                
-                if is_checked:
-                    selected_images.append(file_name)
-
-                # --- Layer 2: 图片 (Row 2) ---
+                # --- A. 图片展示 ---
                 st.image(file_path, use_container_width=True)
 
-                # --- Layer 3: 文件名 (Row 3) ---
+                # --- B. 核心：全宽切换按钮 (替代复选框) ---
+                is_selected = file_name in st.session_state.selected_assets
+                
+                if is_selected:
+                    # 选中状态：绿色按钮，点击取消
+                    if st.button("✅ SELECTED", key=f"btn_{file_name}", type="primary", use_container_width=True):
+                        st.session_state.selected_assets.remove(file_name)
+                        st.rerun()
+                else:
+                    # 未选状态：普通按钮，点击选中
+                    if st.button("⚪ Select", key=f"btn_{file_name}", type="secondary", use_container_width=True):
+                        st.session_state.selected_assets.add(file_name)
+                        st.rerun()
+
+                # --- C. 文件名编辑 ---
                 name_body, ext = os.path.splitext(file_name)
                 new_name_body = st.text_input(
                     "name",
                     value=name_body,
                     key=f"n_{file_name}",
-                    label_visibility="collapsed",
-                    placeholder="filename"
+                    label_visibility="collapsed"
                 )
                 
                 if new_name_body != name_body:
                     try:
-                        os.rename(file_path, os.path.join("images", new_name_body + ext))
+                        new_full_name = new_name_body + ext
+                        os.rename(file_path, os.path.join("images", new_full_name))
+                        # 重命名后更新选中状态里的名字，防止丢失选中
+                        if file_name in st.session_state.selected_assets:
+                            st.session_state.selected_assets.remove(file_name)
+                            st.session_state.selected_assets.add(new_full_name)
                         st.rerun()
                     except: pass
 
-                # --- Layer 4: 删除 (Row 4) ---
+                # --- D. 删除按钮 ---
                 if st.button("🗑️ Delete", key=f"d_{file_name}", type="secondary", use_container_width=True):
                     try:
                         os.remove(file_path)
+                        # 删除后从选中集合移除
+                        if file_name in st.session_state.selected_assets:
+                            st.session_state.selected_assets.remove(file_name)
                         st.rerun()
                     except: pass
 
 # 状态统计
 with c_stat:
-    if selected_images:
-        st.markdown(f"<div style='text-align:right; color:#4CAF50;'><b>{len(selected_images)}</b> Selected</div>", unsafe_allow_html=True)
+    count = len(st.session_state.selected_assets)
+    if count > 0:
+        st.markdown(f"<div style='text-align:right; color:#4CAF50;'>✅ <b>{count}</b> Selected</div>", unsafe_allow_html=True)
 
 st.divider()
 
@@ -198,7 +214,6 @@ st.divider()
 # ===========================
 c_lang, c_font, c_qty, c_go = st.columns([1, 1, 0.8, 1])
 with c_lang:
-    # 修复了 available_langs 可能为空导致的报错
     target_lang = st.selectbox("Lang", available_langs, label_visibility="collapsed")
 with c_font:
     selected_font = st.selectbox("Font", ["Random"] + font_list, label_visibility="collapsed")
@@ -217,13 +232,17 @@ if run_btn:
         with st.spinner("Processing..."):
             results = []
             words_pool = db.get(target_lang, []) or ["LOVE", "HOPE"]
+            
+            # 将选中集合转为列表供随机抽取
+            active_pool = list(st.session_state.selected_assets)
 
             for i in range(qty):
                 word = manual_word.strip() if manual_word.strip() else random.choice(words_pool)
                 
                 img_val = ""
-                if selected_images:
-                    img_val = random.choice(selected_images)
+                # 只有当有选中的图时，才从中抽取
+                if active_pool:
+                    img_val = random.choice(active_pool)
                 
                 font = selected_font if selected_font != "Random" else random.choice(font_list)
                 url_part = f"{img_val} " if img_val else ""
