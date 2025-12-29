@@ -61,20 +61,19 @@ with c3:
 st.divider()
 
 # ===========================
-# 4. 图片预览区 (已移至横线下方)
+# 4. 图片预览区 (横线下方，输入框上方)
 # ===========================
-# 只有选中具体图片时才显示，盲盒不显示
 if selected_ref_key != BLIND_BOX_OPTION and selected_ref_key in ref_map:
     img_file = ref_map[selected_ref_key]
     img_abs_path = os.path.abspath(os.path.join("images", img_file))
     
     if os.path.exists(img_abs_path):
         st.markdown("**Style Preview:**")
-        # 🔥 核心修改：放在这里，独占空间，宽度适中 (250px)
-        st.image(img_abs_path, width=250)
-        st.write("") # 加一点垂直间距
+        # 宽度设为 200px，既看得清又不占满屏幕
+        st.image(img_abs_path, width=200)
+        st.write("") 
     else:
-        st.warning(f"Image file not found: {img_file}")
+        st.warning(f"Preview not found: {img_file}")
 
 # ===========================
 # 5. 底部操作区
@@ -88,20 +87,17 @@ with c_btn:
     run_btn = st.button("Generate", type="primary", use_container_width=True)
 
 # ===========================
-# 6. 生成逻辑 (带反馈)
+# 6. 生成逻辑
 # ===========================
 if run_btn:
     try:
-        # 显示加载状态，解决"没反应"的问题
-        with st.spinner("Running Creative Pipeline..."):
+        with st.spinner("Creating Designs..."):
             results = []
             words_pool = db.get(target_lang, []) or ["LOVE", "HOPE"]
 
             for i in range(qty):
-                # 词汇选择逻辑
                 word = manual_word if manual_word.strip() else random.choice(words_pool)
                 
-                # 图片逻辑
                 img_val = ""
                 if selected_ref_key == BLIND_BOX_OPTION:
                     valid_vals = list(ref_map.values())
@@ -109,10 +105,8 @@ if run_btn:
                 elif selected_ref_key in ref_map:
                     img_val = ref_map.get(selected_ref_key, "")
                 
-                # 字体逻辑
                 font = selected_font if selected_font != "Random" else random.choice(font_list)
                 
-                # 组装咒语
                 url_part = f"{img_val} " if img_val else ""
                 prompt_text = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2"
                 
@@ -121,18 +115,16 @@ if run_btn:
                     "prompt_text": prompt_text
                 })
             
-            # 存入 Session 并人为延迟一点点以便看到 Spinner
             st.session_state.text_solutions = results
             time.sleep(0.3) 
             
-        # 强制刷新页面，确保结果立刻显示
         st.rerun()
         
     except Exception as e:
-        st.error(f"Error during generation: {str(e)}")
+        st.error(f"Error: {str(e)}")
 
 # ===========================
-# 7. 结果展示 (图文并茂)
+# 7. 结果展示 (自由排版版)
 # ===========================
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
     st.write("") 
@@ -140,7 +132,8 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
     
     for item in st.session_state.text_solutions:
         with st.container(border=True):
-            col_img, col_code = st.columns([1.5, 5]) # 调整比例
+            # 🔥 核心修改：列比例调整为 [1, 3]，给文字更多空间
+            col_img, col_text = st.columns([1, 3])
             
             with col_img:
                 if item["image_file"]:
@@ -148,12 +141,18 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
                     if os.path.exists(full_path):
                         st.image(full_path, use_container_width=True)
                     else:
-                        st.caption("Image missing")
+                        st.caption("Img Missing")
                 else:
-                    st.caption("No Image")
+                    st.caption("No Ref Image")
             
-            with col_code:
-                st.code(item["prompt_text"], language="markdown")
+            with col_text:
+                # 🔥 核心修改：使用 markdown 替代 code，实现自动换行，不再“委屈”
+                st.markdown(f"**Prompt:**")
+                st.markdown(f"{item['prompt_text']}")
+                
+                # 额外提供一个小小的复制块，以防需要
+                with st.expander("Copy raw text", expanded=False):
+                    st.code(item['prompt_text'], language=None)
 
     st.write("")
     
