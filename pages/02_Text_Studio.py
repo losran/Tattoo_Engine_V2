@@ -5,7 +5,7 @@ import random
 import time
 
 # ===========================
-# 0. 基础设置与防错
+# 0. 基础设置
 # ===========================
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
@@ -24,98 +24,74 @@ if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
 # ===========================
-# 1. 极简主义 CSS (Invisible Design)
+# 1. 纯装饰性 CSS (不影响点击)
 # ===========================
 st.markdown("""
 <style>
-    /* 1. 卡片容器：降低存在感，深色背景 */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #080808;
-        border: 1px solid #1a1a1a;
-        border-radius: 8px;
-        padding: 0px !important;
-        overflow: hidden; /* 图片圆角对其 */
-    }
-    
-    /* 2. 图片：铺满，无缝 */
-    div[data-testid="stImage"] {
-        margin-bottom: -10px; /* 拉近与下方工具栏的距离 */
-    }
-    div[data-testid="stImage"] img {
-        border-radius: 8px 8px 0 0; /* 上方圆角 */
-        width: 100%;
-        object-fit: cover;
-    }
-
-    /* 3. 文件名输入框：平时隐形，点击出现下划线 */
+    /* 1. 文件名输入框：去边框，扁平化，像文字一样 */
     div[data-testid="stTextInput"] input {
         background-color: transparent !important;
-        border: none !important;
-        border-bottom: 1px solid transparent !important;
+        border: 1px solid #222 !important;
+        border-radius: 4px;
         color: #888 !important;
-        font-size: 11px !important;
-        padding: 0px !important;
-        height: 24px !important;
-        text-align: center; 
+        font-size: 12px !important;
+        padding: 4px 8px !important;
+        height: 30px !important;
+        text-align: center;
     }
     div[data-testid="stTextInput"] input:focus {
-        border-bottom: 1px solid #444 !important;
+        border-color: #555 !important;
         color: #fff !important;
+        background-color: #111 !important;
     }
 
-    /* 4. 删除按钮：变成一个小小的 "✕" 符号 */
+    /* 2. 删除按钮：红色边框，警示感 */
     button[kind="secondary"] {
-        border: none !important;
+        border: 1px solid #331111 !important;
+        color: #662222 !important;
         background: transparent !important;
-        color: #444 !important;
-        padding: 0px !important;
-        font-size: 14px !important;
-        line-height: 1 !important;
-        height: 24px !important;
-        width: 24px !important;
+        font-size: 12px !important;
+        height: 30px !important;
+        margin-top: 5px !important;
     }
     button[kind="secondary"]:hover {
+        border-color: #ff4444 !important;
         color: #ff4444 !important;
-        background: rgba(255, 0, 0, 0.1) !important;
-        border-radius: 50%;
+        background-color: #220505 !important;
     }
-
-    /* 5. 复选框：微调位置 */
-    div[data-testid="stCheckbox"] {
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    div[data-testid="stCheckbox"] label span { display: none; }
     
-    /* 工具栏布局微调 */
-    .toolbar-container {
-        padding: 5px 8px;
-        background-color: #0e0e0e;
-        border-top: 1px solid #1a1a1a;
+    /* 3. 复选框容器微调 */
+    div[data-testid="stCheckbox"] {
+        padding-top: 2px;
+    }
+    
+    /* 4. 卡片容器边框微调 */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border-color: #222;
+        background-color: #050505;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ===========================
-# 2. 数据准备
+# 2. 数据准备 (修复 NameError)
 # ===========================
 db = st.session_state.get("db_all", {})
 font_list = db.get("Font_Style", []) or ["Gothic", "Chrome"]
-# 修复报错：确保 available_langs 一定有定义
-available_langs = [k for k in db.keys() if k.startswith("Text_")] 
-if not available_langs: 
-    available_langs = ["Text_English"] # 兜底默认值
+
+# 修复逻辑：先获取 keys，再做列表推导，最后兜底
+raw_keys = list(db.keys())
+available_langs = [k for k in raw_keys if k.startswith("Text_")]
+if not available_langs:
+    available_langs = ["Text_English"] # 绝对兜底
 
 # ===========================
-# 3. 顶部：隐形上传区
+# 3. 顶部上传
 # ===========================
 st.markdown("## Text Studio")
 
-# 极简上传条
 uploaded_file = st.file_uploader(
-    "📤 Drop to Upload", 
+    "📤 Upload Reference", 
     type=['jpg', 'png', 'jpeg', 'webp'],
     key=f"uploader_{st.session_state.uploader_key}",
     label_visibility="collapsed"
@@ -138,13 +114,13 @@ if uploaded_file is not None:
 st.divider()
 
 # ===========================
-# 4. 核心：精致版卡片画廊
+# 4. 核心：原生布局画廊
 # ===========================
-c_head, c_info = st.columns([3, 1])
+c_head, c_stat = st.columns([3, 1])
 with c_head:
     st.subheader("Visual Library")
 
-# 获取图片并排序
+# 获取图片
 raw_map = fetch_image_refs_auto()
 if not isinstance(raw_map, dict): raw_map = {}
 all_files = [v for v in raw_map.values() if v]
@@ -156,67 +132,73 @@ sorted_image_files = [x[0] for x in valid_files]
 selected_images = []
 
 if not sorted_image_files:
-    st.info("Gallery is empty.")
+    st.info("Library is empty.")
 else:
-    # 5列布局，保持间距
-    cols = st.columns(5, gap="medium")
+    # 5列布局
+    cols = st.columns(5)
     
     for idx, file_name in enumerate(sorted_image_files):
         file_path = os.path.join("images", file_name)
         col = cols[idx % 5]
         
         with col:
-            # 🔥 极简卡片容器 🔥
+            # 🔥 每一张图一个独立的卡片容器 🔥
             with st.container(border=True):
-                # 1. 图片 (撑满顶部)
-                st.image(file_path, use_container_width=True)
                 
-                # 2. 底部极简工具栏 (一行搞定所有)
-                # 比例：[复选框] [文件名.........] [删除]
-                c_tool_chk, c_tool_name, c_tool_del = st.columns([1, 4, 1])
-                
-                with c_tool_chk:
+                # --- Layer 1: 选择区 (Row 1) ---
+                # 使用 columns 将复选框和状态分开
+                c_chk, c_lbl = st.columns([1, 2])
+                with c_chk:
+                    # 原生复选框，绝对能点
                     is_checked = st.checkbox("sel", key=f"chk_{file_name}", label_visibility="collapsed")
+                with c_lbl:
                     if is_checked:
-                        selected_images.append(file_name)
+                        st.markdown(":white_check_mark: **Active**")
+                    else:
+                        st.caption("Select") # 占位，保持对齐
                 
-                with c_tool_name:
-                    # 文件名编辑：去掉了边框，看起来像 caption
-                    name_body, ext = os.path.splitext(file_name)
-                    new_name_body = st.text_input(
-                        "name",
-                        value=name_body,
-                        key=f"n_{file_name}",
-                        label_visibility="collapsed",
-                        placeholder="name"
-                    )
-                    # 重命名逻辑
-                    if new_name_body != name_body:
-                        try:
-                            os.rename(file_path, os.path.join("images", new_name_body + ext))
-                            st.rerun()
-                        except: pass
+                if is_checked:
+                    selected_images.append(file_name)
 
-                with c_tool_del:
-                    # 删除按钮：仅显示一个小 ✕
-                    if st.button("✕", key=f"d_{file_name}", type="secondary", use_container_width=True):
-                        try:
-                            os.remove(file_path)
-                            st.rerun()
-                        except: pass
+                # --- Layer 2: 图片 (Row 2) ---
+                st.image(file_path, use_container_width=True)
+
+                # --- Layer 3: 文件名 (Row 3) ---
+                name_body, ext = os.path.splitext(file_name)
+                new_name_body = st.text_input(
+                    "name",
+                    value=name_body,
+                    key=f"n_{file_name}",
+                    label_visibility="collapsed",
+                    placeholder="filename"
+                )
+                
+                if new_name_body != name_body:
+                    try:
+                        os.rename(file_path, os.path.join("images", new_name_body + ext))
+                        st.rerun()
+                    except: pass
+
+                # --- Layer 4: 删除 (Row 4) ---
+                if st.button("🗑️ Delete", key=f"d_{file_name}", type="secondary", use_container_width=True):
+                    try:
+                        os.remove(file_path)
+                        st.rerun()
+                    except: pass
 
 # 状态统计
-with c_info:
+with c_stat:
     if selected_images:
-        st.markdown(f"<div style='text-align:right; color:#4CAF50; font-size:14px;'>● {len(selected_images)} Selected</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:right; color:#4CAF50;'><b>{len(selected_images)}</b> Selected</div>", unsafe_allow_html=True)
 
 st.divider()
 
 # ===========================
-# 5. 生成控制区
+# 5. 生成控制
 # ===========================
 c_lang, c_font, c_qty, c_go = st.columns([1, 1, 0.8, 1])
 with c_lang:
+    # 修复了 available_langs 可能为空导致的报错
     target_lang = st.selectbox("Lang", available_langs, label_visibility="collapsed")
 with c_font:
     selected_font = st.selectbox("Font", ["Random"] + font_list, label_visibility="collapsed")
