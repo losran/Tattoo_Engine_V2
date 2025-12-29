@@ -3,7 +3,7 @@ import sys
 import os
 
 # ===========================
-# 0. 路径修复 (必须保留，否则找不到 engine_manager)
+# 0. 路径修复 (必须保留)
 # ===========================
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
@@ -11,7 +11,6 @@ if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
 import random
-# 导入核心模块 (无翻译模块，确保 engine_manager 已回滚)
 from engine_manager import init_data, render_sidebar, fetch_image_refs_auto
 from style_manager import apply_pro_style
 
@@ -35,15 +34,20 @@ if not available_langs: available_langs = ["Text_English"]
 
 font_list = db.get("Font_Style", []) or ["Gothic", "Chrome"]
 
-# 🔥 核心功能修复：图片引用清洗 (确保Blind Box有效)
+# 🔥 核心修复点：允许本地图片通过 🔥
 raw_map = fetch_image_refs_auto()
 if not isinstance(raw_map, dict): raw_map = {}
-ref_map = {k: v for k, v in raw_map.items() if v and isinstance(v, str) and v.startswith("http")}
+
+# ❌ 之前的错误：ref_map = {k: v for k, v in raw_map.items() if ... and v.startswith("http")}
+# ✅ 现在的正确写法：只要有值(v)就可以，不需要必须是 http 开头
+ref_map = {k: v for k, v in raw_map.items() if v}
+
 BLIND_BOX_OPTION = "🎲 Blind Box (Random)"
 
 if not ref_map:
     ref_options = ["(No Images Available)"]
 else:
+    # 将字典的 key (也就是带文件夹图标的名字) 转为列表
     ref_options = [BLIND_BOX_OPTION] + list(ref_map.keys())
 
 # ===========================
@@ -82,17 +86,24 @@ if run_btn:
     for i in range(qty):
         word = manual_word if manual_word else random.choice(words_pool)
         
-        img_url = ""
-        # 🔥 核心功能修复：Blind Box 逻辑
+        img_val = "" # 这里存的是具体的文件名或URL
+        
+        # 逻辑：从 ref_map 中取值
         if selected_ref == BLIND_BOX_OPTION:
-            valid_urls = list(ref_map.values())
-            if valid_urls: img_url = random.choice(valid_urls)
+            # 盲盒：随机抽一个 value
+            valid_vals = list(ref_map.values())
+            if valid_vals: img_val = random.choice(valid_vals)
         elif selected_ref in ref_map:
-            img_url = ref_map.get(selected_ref, "")
+            # 指定：直接取 value
+            img_val = ref_map.get(selected_ref, "")
         
         font = selected_font if selected_font != "Random" else random.choice(font_list)
         
-        url_part = f"{img_url} " if img_url else ""
+        # 组装 Prompt
+        # 如果 img_val 是本地文件名 (不含http)，我们只作为文本参考放进去，或者需要你手动上传
+        # 这里直接拼接到 Prompt 前面
+        url_part = f"{img_val} " if img_val else ""
+        
         prompt = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2"
         results.append(prompt)
 
@@ -112,5 +123,4 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
         if "global_queue" not in st.session_state:
             st.session_state.global_queue = []
         st.session_state.global_queue.extend(st.session_state.text_solutions)
-        # 根据你的截图，文件名确实是 03_Automation.py，这里是正确的
         st.switch_page("pages/03_Automation.py")
