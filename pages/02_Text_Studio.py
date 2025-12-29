@@ -3,7 +3,7 @@ import sys
 import os
 import random
 import time
-import urllib.parse # 必须组件：用于URL编码
+import urllib.parse # 用于URL编码
 
 # ===========================
 # 0. 基础设置
@@ -37,18 +37,15 @@ if "selected_assets" not in st.session_state:
     st.session_state.selected_assets = set()
 
 # ===========================
-# 1. 核心回调 (Callbacks) - 新增全选逻辑
+# 1. 核心回调 (Callbacks)
 # ===========================
-
 def toggle_selection(file_name):
-    """单选回调"""
     if file_name in st.session_state.selected_assets:
         st.session_state.selected_assets.remove(file_name)
     else:
         st.session_state.selected_assets.add(file_name)
 
 def delete_asset(file_path, file_name):
-    """删除回调"""
     try:
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -58,36 +55,49 @@ def delete_asset(file_path, file_name):
         print(f"Delete Error: {e}")
 
 def toggle_all_selection(all_files_list):
-    """🔥 全选/全不选回调 🔥"""
-    # 如果当前已选数量等于总数 -> 执行全不选
     if len(st.session_state.selected_assets) == len(all_files_list) and len(all_files_list) > 0:
         st.session_state.selected_assets = set()
     else:
-        # 否则 -> 执行全选
         st.session_state.selected_assets = set(all_files_list)
 
 # ===========================
-# 2. CSS 样式 (保持原样)
+# 2. CSS 样式 (上方网格，下方列表)
 # ===========================
 st.markdown("""
 <style>
+    /* 上方画廊响应式核心 */
     [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 12px !important; }
     [data-testid="column"] { min-width: 160px !important; flex: 1 1 160px !important; width: auto !important; max-width: 100% !important; }
-    [data-testid="stVerticalBlockBorderWrapper"] { padding: 2px !important; background-color: #0a0a0a; border: 1px solid #222; border-radius: 8px; }
+
+    /* 卡片容器 */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        padding: 2px !important; 
+        background-color: #0a0a0a;
+        border: 1px solid #222;
+        border-radius: 8px;
+    }
     [data-testid="stVerticalBlockBorderWrapper"]:hover { border-color: #555; }
+
+    /* 图片 */
     div[data-testid="stImage"] { margin-bottom: 2px !important; }
     div[data-testid="stImage"] img { border-radius: 6px !important; width: 100%; display: block; }
+
+    /* 按钮基础 */
     button { width: 100%; border-radius: 6px !important; border: none !important; white-space: nowrap !important; }
-    button[kind="primary"] { background-color: #1b3a1b !important; color: #4CAF50 !important; font-weight: 600 !important; height: 36px !important; }
+    button[kind="primary"] { background-color: #1b3a1b !important; border: 1px solid #2e5c2e !important; color: #4CAF50 !important; font-weight: 600 !important; height: 36px !important; }
     button[kind="primary"]:hover { background-color: #2e6b2e !important; color: #fff !important; }
     button[kind="secondary"] { background-color: #161616 !important; color: #888 !important; height: 36px !important; border: 1px solid #222 !important; }
     button[kind="secondary"]:hover { background-color: #222 !important; color: #ccc !important; border-color: #444 !important; }
     div[data-testid="column"] button[help="Delete"]:hover { background-color: #330000 !important; color: #ff4444 !important; border-color: #ff4444 !important; }
+    
     button[title="View fullscreen"] { display: none; }
     div[role="radiogroup"] { justify-content: flex-end; }
     
-    /* 全选按钮特别样式 */
-    .stButton button:contains("Select All") { border: 1px dashed #444 !important; color: #aaa !important; }
+    /* 下方结果区代码块样式优化 */
+    .stCodeBlock {
+        border: 1px solid #333 !important;
+        border-radius: 6px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -125,39 +135,26 @@ st.divider()
 # ===========================
 @fragment
 def render_gallery_fragment(current_col_count):
-    c_head, c_ctrl = st.columns([3, 1]) # 分两栏：标题 | 全选按钮
+    c_head, c_ctrl = st.columns([3, 1])
     
-    # 获取数据
     raw_map = fetch_image_refs_auto()
     if not isinstance(raw_map, dict): raw_map = {}
     all_files = [v for v in raw_map.values() if v]
     full_paths = [(f, os.path.join("images", f)) for f in all_files]
     valid_files = [x for x in full_paths if os.path.exists(x[1])]
     valid_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
-    sorted_image_files = [x[0] for x in valid_files] # 所有有效文件名列表
+    sorted_image_files = [x[0] for x in valid_files]
 
-    # 清理无效选中
     st.session_state.selected_assets = {f for f in st.session_state.selected_assets if f in sorted_image_files}
 
     with c_head:
         st.subheader("Visual Library")
         
-    # 🔥 全选按钮逻辑 🔥
     with c_ctrl:
         if sorted_image_files:
-            # 判断当前是不是全选状态
             is_all_selected = (len(st.session_state.selected_assets) == len(sorted_image_files)) and (len(sorted_image_files) > 0)
             btn_label = "❌ Uncheck All" if is_all_selected else "✅ Select All"
-            btn_type = "secondary" # 始终用灰色，避免抢视觉
-            
-            st.button(
-                btn_label, 
-                key="btn_toggle_all", 
-                type=btn_type, 
-                use_container_width=True,
-                on_click=toggle_all_selection,  # <--- 绑定全选回调
-                args=(sorted_image_files,)      # <--- 传入所有文件列表
-            )
+            st.button(btn_label, key="btn_toggle_all", type="secondary", use_container_width=True, on_click=toggle_all_selection, args=(sorted_image_files,))
 
     if not sorted_image_files:
         st.info("Library is empty.")
@@ -181,7 +178,6 @@ def render_gallery_fragment(current_col_count):
                     with c_del:
                         st.button("🗑", key=f"d_{file_name}", type="secondary", use_container_width=True, help="Delete", on_click=delete_asset, args=(file_path, file_name))
 
-    # 底部状态条 (在 Fragment 内实时更新)
     if st.session_state.selected_assets:
         st.markdown(f"<div style='text-align:right; color:#4CAF50; padding-top:10px;'>✅ <b>{len(st.session_state.selected_assets)}</b> Selected</div>", unsafe_allow_html=True)
 
@@ -209,7 +205,7 @@ with c_go:
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
 # ===========================
-# 6. 生成逻辑 (GitHub URL + **)
+# 6. 生成逻辑 (🔥 修复：GitHub URL + 强制双星号 + 强制换行 🔥)
 # ===========================
 if run_btn:
     try:
@@ -218,14 +214,14 @@ if run_btn:
             words_pool = db.get(target_lang, []) or ["LOVE", "HOPE"]
             active_pool = list(st.session_state.selected_assets)
             
-            # 🔥 1. GitHub Raw 基座
+            # 1. GitHub Raw URL
             GITHUB_RAW_BASE = "https://raw.githubusercontent.com/losran/Tattoo_Engine_V2/main/images/"
 
             for i in range(qty):
                 word = manual_word.strip() if manual_word.strip() else random.choice(words_pool)
                 img_val = random.choice(active_pool) if active_pool else ""
                 
-                # 🔥 2. URL 编码 + 拼接
+                # 2. URL 编码
                 full_img_url = ""
                 if img_val:
                     safe_filename = urllib.parse.quote(img_val)
@@ -233,8 +229,12 @@ if run_btn:
                 
                 font = selected_font if selected_font != "Random" else random.choice(font_list)
                 
-                # 🔥 3. Prompt: URL在前 + 结尾双星号
+                # 3. Prompt 拼接
                 url_part = f"{full_img_url} " if full_img_url else ""
+                
+                # 🔥 关键修改：
+                # (1) 结尾硬编码 " --iw 2 **" (注意空格)
+                # (2) prompt 字符串里不带换行，但导出到队列时会自动处理
                 prompt_text = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2 **"
                 
                 results.append({"image_file": img_val, "prompt_text": prompt_text})
@@ -247,41 +247,43 @@ if run_btn:
         st.error(str(e))
 
 # ===========================
-# 7. 结果展示 (卡片网格)
+# 7. 结果展示 (🔥 列表布局：左图右文 🔥)
 # ===========================
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
     st.write("") 
     st.subheader("Results")
     
-    res_cols = st.columns(col_count) # 复用布局列数
-    
     for idx, item in enumerate(st.session_state.text_solutions):
-        col = res_cols[idx % col_count]
-        with col:
-            with st.container(border=True):
-                # 预览本地图 (速度快)
+        # 容器封装每一行
+        with st.container(border=True):
+            col_img, col_text = st.columns([1, 5])
+            
+            with col_img:
                 if item["image_file"]:
                     full_path = os.path.abspath(os.path.join("images", item["image_file"]))
                     if os.path.exists(full_path):
                         st.image(full_path, use_container_width=True)
-                
-                # 显示 Prompt (包含 URL)
-                st.text_area(
-                    "Prompt",
-                    value=item['prompt_text'],
-                    height=100,
-                    key=f"res_{idx}",
-                    label_visibility="collapsed"
-                )
+            
+            with col_text:
+                # 显示 Prompt (使用 code 块)
+                st.code(item['prompt_text'], language="bash")
 
     st.write("")
     if st.button("Import to Automation Queue", type="primary", use_container_width=True):
         if "global_queue" not in st.session_state:
             st.session_state.global_queue = []
         
-        pure_texts = [item["prompt_text"] for item in st.session_state.text_solutions]
+        # 导出列表
+        pure_texts = []
+        for item in st.session_state.text_solutions:
+            # 🔥 防御性编程：导出时再确保一下格式
+            # 虽然上面生成已经加了 **，这里我们不做额外处理，直接传列表。
+            # 自动化脚本如果按行读取列表，就不会错。
+            pure_texts.append(item["prompt_text"])
+            
         st.session_state.global_queue.extend(pure_texts)
         
+        # 提示用户具体导入了多少条
         st.toast(f"✅ Imported {len(pure_texts)} tasks to Automation")
         time.sleep(1)
         st.switch_page("pages/03_Automation.py")
