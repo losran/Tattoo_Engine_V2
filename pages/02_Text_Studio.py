@@ -3,7 +3,7 @@ import sys
 import os
 import random
 import time
-import urllib.parse # 用于处理中文文件名的URL编码
+import urllib.parse # 必须组件：用于处理中文文件名的链接转码
 
 # ===========================
 # 0. 基础设置
@@ -55,7 +55,7 @@ def delete_asset(file_path, file_name):
         print(f"Delete Error: {e}")
 
 # ===========================
-# 2. CSS 样式 (网格布局)
+# 2. CSS 样式 (保持网格美学)
 # ===========================
 st.markdown("""
 <style>
@@ -89,7 +89,7 @@ st.markdown("""
     button[title="View fullscreen"] { display: none; }
     div[role="radiogroup"] { justify-content: flex-end; }
     
-    /* 结果区文本框优化 */
+    /* 结果区文本框 */
     div[data-testid="stTextArea"] textarea {
         font-size: 12px !important;
         background-color: #111 !important;
@@ -204,7 +204,7 @@ with c_go:
 manual_word = st.text_input("Custom Text", placeholder="Input text here (Optional)...", label_visibility="collapsed")
 
 # ===========================
-# 6. 生成逻辑 (🔥 核心修复：GitHub Raw URL 直连 🔥)
+# 6. 生成逻辑 (🔥 GitHub URL + 双星号修正 🔥)
 # ===========================
 if run_btn:
     try:
@@ -213,8 +213,8 @@ if run_btn:
             words_pool = db.get(target_lang, []) or ["LOVE", "HOPE"]
             active_pool = list(st.session_state.selected_assets)
 
-            # 🔥 定义 GitHub 仓库的 RAW 基础路径 (基于您提供的链接) 🔥
-            # 这是 Midjourney 能直接读取的公网地址
+            # 🔥 1. 硬编码 GitHub 仓库 Raw 地址基座
+            # 这是 Midjourney 唯一能读懂的地址格式
             GITHUB_RAW_BASE = "https://raw.githubusercontent.com/losran/Tattoo_Engine_V2/main/images/"
 
             for i in range(qty):
@@ -225,21 +225,21 @@ if run_btn:
                 
                 if active_pool:
                     img_val = random.choice(active_pool)
-                    # 🔥 处理文件名 (URL编码，防止中文/空格报错)
+                    # 🔥 2. URL 编码 + 拼接
+                    # urllib.parse.quote 把 "微信图片.png" 变成 "%E5%BE%AE..."，防止乱码报错
                     safe_filename = urllib.parse.quote(img_val)
-                    # 🔥 拼接成完整的 GitHub Raw URL
                     full_img_url = f"{GITHUB_RAW_BASE}{safe_filename}"
                 
                 font = selected_font if selected_font != "Random" else random.choice(font_list)
                 
-                # 🔥 Prompt 拼接：使用公网 URL，Midjourney 此时可以读取了
+                # 🔥 3. Prompt 拼接：URL在前 + 结尾加 ** (双星号)
                 url_part = f"{full_img_url} " if full_img_url else ""
-                prompt_text = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2"
+                # 注意最后的 **，这是为了让你的自动化脚本切分任务
+                prompt_text = f"{url_part}Tattoo design of the word '{word}', {font} style typography, clean white background, high contrast --iw 2 **"
                 
                 results.append({
-                    "image_file": img_val,     # 用于本地预览
-                    "image_url": full_img_url, # 用于 Prompt
-                    "prompt_text": prompt_text # 最终指令
+                    "image_file": img_val,     # 用于本地显示
+                    "prompt_text": prompt_text # 最终发给自动化的指令
                 })
             
             st.session_state.text_solutions = results
@@ -250,28 +250,28 @@ if run_btn:
         st.error(str(e))
 
 # ===========================
-# 7. 结果展示 (🔥 修复：网格卡片封装 🔥)
+# 7. 结果展示 (🔥 网格卡片封装 🔥)
 # ===========================
 if "text_solutions" in st.session_state and st.session_state.text_solutions:
     st.write("") 
     st.subheader("Results")
     
-    # 🔥 使用网格布局 (复用 col_count) 🔥
+    # 重新使用网格布局 (复用 col_count)
     res_cols = st.columns(col_count) 
     
     for idx, item in enumerate(st.session_state.text_solutions):
         col = res_cols[idx % col_count]
         
         with col:
-            # 方案封装：漂亮的卡片
+            # 使用卡片封装
             with st.container(border=True):
-                # 1. 本地图片预览 (为了速度，预览还是读本地)
+                # 1. 预览本地图片 (为了快，看本地的，发给MJ用URL)
                 if item["image_file"]:
                     full_path = os.path.abspath(os.path.join("images", item["image_file"]))
                     if os.path.exists(full_path):
                         st.image(full_path, use_container_width=True)
                 
-                # 2. Prompt 文本框 (封装在卡片内)
+                # 2. Prompt 文本框
                 st.text_area(
                     "Prompt",
                     value=item['prompt_text'],
@@ -287,7 +287,7 @@ if "text_solutions" in st.session_state and st.session_state.text_solutions:
         if "global_queue" not in st.session_state:
             st.session_state.global_queue = []
         
-        # 🔥 确保是 List[String]，每条 Prompt 都是独立的
+        # 导出 List
         pure_texts = [item["prompt_text"] for item in st.session_state.text_solutions]
         st.session_state.global_queue.extend(pure_texts)
         
