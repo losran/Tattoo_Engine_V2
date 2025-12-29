@@ -191,7 +191,7 @@ if "graphic_solutions" in st.session_state and st.session_state.graphic_solution
             st.session_state.global_queue.extend(st.session_state.graphic_solutions)
             st.toast(f"✅ 已添加 {len(st.session_state.graphic_solutions)} 组高权重方案")
             time.sleep(0.8)
-            st.switch_page("pages/03_🚀_Automation.py")
+            st.switch_page("pages/03_Automation.py")
             
     with c_clear:
         if st.button("🗑️ 清空结果", use_container_width=True):
