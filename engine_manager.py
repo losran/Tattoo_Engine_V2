@@ -81,11 +81,9 @@ def render_sidebar():
         # 优先检测新路径，如果找不到再检测旧路径（做个兼容）
         if os.path.exists(logo_path):
             st.logo(logo_path, icon_image=logo_path)
-        elif os.path.exists("images/logo.png"):
-            st.logo("images/logo.png", icon_image="images/logo.png")
+        elif os.path.exists("images/logo/logo.png"):
+            st.logo("images/logo/logo.png", icon_image="images/logo/logo.png")
         
-        st.subheader("Console")
-        st.markdown("---")
         
         # 库存监控 (保持垂直清单，但合并代码减少间距，防止出现滚动条)
         if "db_all" in st.session_state:
