@@ -33,7 +33,7 @@ st.markdown("""
 <style>
     /* 1. 卡片容器：增加内边距 */
     [data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 4px !important; /* 👈 这里调节【卡片边框距离】 (0px -> 10px) */
+        padding: 2px !important; /* 👈 这里调节【卡片边框距离】 (0px -> 10px) */
         background-color: #0a0a0a;
         border: 1px solid #222;
         border-radius: 8px; /* 卡片本身圆角 */
