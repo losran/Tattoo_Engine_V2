@@ -27,107 +27,91 @@ if "selected_assets" not in st.session_state:
     st.session_state.selected_assets = set()
 
 # ===========================
-# 1. 核心 CSS：实现自动换行的瀑布流
+# 1. CSS 强制响应式补丁
 # ===========================
 st.markdown("""
 <style>
-    /* 1. 强制列容器允许换行 (关键) */
+    /* --- 核心：强制列宽和换行 (解决手机端挤压问题) --- */
+    
+    /* 1. 找到所有列的父容器，强制允许换行 */
     [data-testid="stHorizontalBlock"] {
         flex-wrap: wrap !important;
-        align-items: flex-start !important; /* 顶部对齐，形成瀑布流错落感 */
+        gap: 12px !important; /* 列与列的间距 */
     }
 
-    /* 2. 设定列的“底线”宽度 */
+    /* 2. 找到每一个单独的列，锁死最小宽度 */
     [data-testid="column"] {
-        min-width: 140px !important;  /* 手机上正好放下2列 */
-        flex: 1 1 auto !important;    /* 允许拉伸填满空隙 */
-        max-width: 100% !important;   /* 解除最大宽度限制 */
+        /* 关键：每个列至少要占 160px，否则就换行 */
+        min-width: 160px !important;
+        /* 让列自动填满剩余空间，但不小于 160px */
+        flex: 1 1 160px !important; 
+        /* 覆盖 Streamlit 默认的百分比宽度 */
+        width: auto !important;
+        max-width: 100% !important;
     }
 
-    /* 3. 卡片样式：紧凑、黑底 */
+    /* --- 卡片美化 --- */
     [data-testid="stVerticalBlockBorderWrapper"] {
-        padding: 0px !important;
-        background-color: #0a0a0a;
+        padding: 6px !important; /* 卡片内边距：让图片不贴边 */
+        background-color: #0e0e0e;
         border: 1px solid #222;
-        overflow: hidden;
-        margin-bottom: 12px; /* 卡片之间的垂直间距 */
-    }
-    [data-testid="stVerticalBlockBorderWrapper"]:hover {
-        border-color: #666;
+        border-radius: 6px;
+        margin-bottom: 8px; /* 卡片垂直间距 */
     }
 
-    /* 4. 图片：无缝 */
+    /* --- 图片 --- */
     div[data-testid="stImage"] {
-        margin-bottom: 0px !important;
+        margin-bottom: 6px !important; /* 图片和下方元素的距离 */
     }
     div[data-testid="stImage"] img {
-        border-radius: 0px !important;
+        border-radius: 4px !important;
         width: 100%;
         display: block;
     }
 
-    /* 5. 标题(文件名)优化 */
-    div[data-testid="stTextInput"] {
-        padding: 4px 0px;
-        background-color: #0e0e0e;
-    }
-    div[data-testid="stTextInput"] input {
-        background-color: transparent !important;
-        border: none !important;
-        color: #eee !important;
-        font-size: 13px !important; /* 字体加大 */
-        font-weight: 600 !important; /* 加粗 */
-        text-align: center;
-        height: 28px !important;
-    }
-    div[data-testid="stTextInput"] input:focus {
-        background-color: #222 !important;
-    }
-
-    /* 6. 按钮组：无缝拼接 */
+    /* --- 按钮组 (无缝拼接风格) --- */
     button {
-        border-radius: 0px !important;
         border: none !important;
         margin: 0px !important;
         width: 100%;
-        white-space: nowrap !important; /* 禁止文字换行 */
+        white-space: nowrap !important;
     }
     
     /* 选中按钮 (左) */
     button[kind="primary"] {
         background-color: #1b3a1b !important;
+        border: 1px solid #2e5c2e !important;
         color: #4CAF50 !important;
         font-weight: 700 !important;
-        height: 38px !important;
+        height: 34px !important;
+        border-radius: 4px !important;
     }
     button[kind="primary"]:hover {
         background-color: #2e6b2e !important;
         color: #fff !important;
     }
     
+    /* 未选/删除按钮 (灰) */
     button[kind="secondary"] {
-        background-color: #111 !important;
+        background-color: #1a1a1a !important;
+        border: 1px solid #333 !important;
         color: #888 !important;
-        height: 38px !important;
-        border-top: 1px solid #222 !important;
+        height: 34px !important;
+        border-radius: 4px !important;
     }
     button[kind="secondary"]:hover {
-        background-color: #222 !important;
-        color: #ddd !important;
+        border-color: #666 !important;
+        color: #ccc !important;
     }
 
-    /* 删除按钮 (右) */
-    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"] {
-        border-left: 1px solid #222 !important;
-    }
-    div[data-testid="column"]:nth-of-type(2) button[kind="secondary"]:hover {
+    /* 删除按钮特定样式 */
+    div[data-testid="column"] button[help="Delete"]:hover {
         background-color: #330000 !important;
         color: #ff4444 !important;
+        border-color: #ff4444 !important;
     }
     
-    /* 隐藏全屏按钮 */
     button[title="View fullscreen"] { display: none; }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -170,13 +154,12 @@ if uploaded_file is not None:
 st.divider()
 
 # ===========================
-# 4. 自动瀑布流画廊 (Masonry Gallery)
+# 4. 自动响应式画廊
 # ===========================
 c_head, c_stat = st.columns([3, 1])
 with c_head:
     st.subheader("Visual Library")
 
-# 获取图片
 raw_map = fetch_image_refs_auto()
 if not isinstance(raw_map, dict): raw_map = {}
 all_files = [v for v in raw_map.values() if v]
@@ -190,55 +173,35 @@ st.session_state.selected_assets = {f for f in st.session_state.selected_assets 
 if not sorted_image_files:
     st.info("Library is empty.")
 else:
-    # 🔥 核心逻辑：创建 6 个固定的垂直列 🔥
-    # Python 负责垂直分发 (Masonry Logic)
-    # CSS 负责水平折叠 (Responsive Logic)
-    
+    # 🔥 核心布局：依然使用 6 列 🔥
+    # 但由于上面的 CSS 强制了 min-width: 160px，
+    # 在手机上这 6 列会自动折叠成 3 行 (每行2列)，实现自动响应。
     NUM_COLS = 6
     cols = st.columns(NUM_COLS)
     
     for idx, file_name in enumerate(sorted_image_files):
-        # 算法：依次把图片放入第 0, 1, 2, 3, 4, 5 列，然后循环
-        # 这样每一列都会积累图片，形成垂直堆叠
+        # 瀑布流逻辑：垂直分发
         col_index = idx % NUM_COLS
         file_path = os.path.join("images", file_name)
         
         with cols[col_index]:
-            # === 卡片开始 ===
             with st.container(border=True):
                 # 1. 图片
                 st.image(file_path, use_container_width=True)
                 
-                # 2. 标题 (文件名) - 可编辑
-                name_body, ext = os.path.splitext(file_name)
-                new_name_body = st.text_input(
-                    "n",
-                    value=name_body,
-                    key=f"n_{file_name}",
-                    label_visibility="collapsed"
-                )
-                if new_name_body != name_body:
-                    try:
-                        new_full_name = new_name_body + ext
-                        os.rename(file_path, os.path.join("images", new_full_name))
-                        if file_name in st.session_state.selected_assets:
-                            st.session_state.selected_assets.remove(file_name)
-                            st.session_state.selected_assets.add(new_full_name)
-                        st.rerun()
-                    except: pass
-                
-                # 3. 操作栏
+                # 2. 按钮区 (Grid Layout)
                 c_sel, c_del = st.columns([3, 1], gap="small")
                 
                 is_selected = file_name in st.session_state.selected_assets
                 
                 with c_sel:
-                    # 选中按钮
                     if is_selected:
+                        # 选中态：绿色 Active
                         if st.button("✅ Active", key=f"s_{file_name}", type="primary", use_container_width=True):
                             st.session_state.selected_assets.remove(file_name)
                             st.rerun()
                     else:
+                        # 未选态：灰色 Select
                         if st.button("Select", key=f"s_{file_name}", type="secondary", use_container_width=True):
                             st.session_state.selected_assets.add(file_name)
                             st.rerun()
@@ -252,7 +215,6 @@ else:
                                 st.session_state.selected_assets.remove(file_name)
                             st.rerun()
                         except: pass
-            # === 卡片结束 ===
 
 # 状态统计
 with c_stat:
