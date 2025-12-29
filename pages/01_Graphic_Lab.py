@@ -90,7 +90,7 @@ def assemble_weighted_skeleton(user_input):
 # ===========================
 # 3. 界面交互
 # ===========================
-st.markdown("## 🎨 Graphic Lab (Deep Refinement)")
+st.markdown("## Graphic Lab")
 st.caption("High Weight Action & Mood -> Multi-Subject -> 200 Words Polish")
 
 c1, c2 = st.columns([3, 1])
@@ -102,7 +102,7 @@ with c2:
 # ===========================
 # 4. 执行生成 (AI 深度润色)
 # ===========================
-if st.button("✨ 一键生成高权重方案", type="primary", use_container_width=True):
+if st.button("一键生成高权重方案", type="primary", use_container_width=True):
     
     st.session_state.graphic_solutions = [] 
     placeholders = []   
@@ -177,7 +177,7 @@ if st.button("✨ 一键生成高权重方案", type="primary", use_container_wi
 # ===========================
 if "graphic_solutions" in st.session_state and st.session_state.graphic_solutions:
     st.markdown("---")
-    st.subheader("📦 Ready for Automation")
+    st.subheader("Ready for Automation")
     
     for sol in st.session_state.graphic_solutions:
         with st.container(border=True):
@@ -185,15 +185,15 @@ if "graphic_solutions" in st.session_state and st.session_state.graphic_solution
         
     c_send, c_clear = st.columns([3, 1])
     with c_send:
-        if st.button("🚀 发送至自动化流水线 (叠加)", type="primary", use_container_width=True):
+        if st.button("发送至自动化流水线", type="primary", use_container_width=True):
             if "global_queue" not in st.session_state:
                 st.session_state.global_queue = []
             st.session_state.global_queue.extend(st.session_state.graphic_solutions)
-            st.toast(f"✅ 已添加 {len(st.session_state.graphic_solutions)} 组高权重方案")
+            st.toast(f"已添加 {len(st.session_state.graphic_solutions)} 组高权重方案")
             time.sleep(0.8)
             st.switch_page("pages/03_Automation.py")
             
     with c_clear:
-        if st.button("🗑️ 清空结果", use_container_width=True):
+        if st.button("清空结果", use_container_width=True):
             st.session_state.graphic_solutions = []
             st.rerun()
