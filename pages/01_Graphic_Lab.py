@@ -73,7 +73,7 @@ def assemble_weighted_skeleton(user_input):
     # 3. 基础配料 (引入旧版的混沌机制)
     s_sys   = smart_pick("StyleSystem", 1)
     s_tech  = smart_pick("Technique", 1)
-    s_col   = smart_pick("Color", 1) # 颜色改回 1 个，避免太乱
+    s_col   = smart_pick("Color", 2) # 颜色改回 1 个，避免太乱
     
     # 4. 混沌参数 (40% 概率触发额外点缀，重现旧版灵魂)
     s_acc = ""
