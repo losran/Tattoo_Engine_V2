@@ -4,7 +4,7 @@ import os
 import sys
 import pandas as pd
 from openai import OpenAI
-
+from github import Github  # 🔥 必须引入这个库
 # ===========================
 # 0. 基础路径 & 引入模块
 # ===========================
@@ -16,72 +16,96 @@ if parent_dir not in sys.path:
 from engine_manager import render_sidebar, WAREHOUSE, init_data
 from style_manager import apply_pro_style
 
-# ===========================
-# 1. 核心功能函数 (🔥 硬盘读写补丁 🔥)
-# ===========================
-# ===========================
-# 1. 核心功能函数 (精准适配 styles_ 前缀和复数)
-# ===========================
-# ===========================
-# 🔥 只替换这部分：智能寻路与强制写盘函数 🔥
-# ===========================
-def find_real_file_path(category):
+# ==========================================
+# 🔥 核心：GitHub API 远程写入逻辑 🔥
+# ==========================================
+
+def get_repo_connection():
+    """连接 GitHub 仓库"""
+    try:
+        token = st.secrets["general"]["GITHUB_TOKEN"]
+        repo_name = st.secrets["general"]["REPO_NAME"]
+        g = Github(token)
+        return g.get_repo(repo_name)
+    except Exception as e:
+        st.error(f"GitHub 配置错误: {e}")
+        return None
+
+def find_remote_file_path(repo, category):
     """
-    智能寻路：根据分类名，自动去文件夹里找对应的真实文件。
-    解决 Color -> styles_color.txt 或 Action -> actions.txt 的匹配问题。
+    在 GitHub 仓库里找真实文件路径 (解决 styles_ 前缀问题)
     """
     clean_cat = category.strip().lower()
-    
-    # 1. 构造所有可能的真实文件名 (根据您的文件结构)
     candidates = [
-        f"{clean_cat}.txt",              # color.txt
-        f"styles_{clean_cat}.txt",       # styles_color.txt (命中!)
-        f"{clean_cat}s.txt",             # actions.txt (命中!)
-        f"styles_{clean_cat}s.txt",      # styles_colors.txt
-        f"text_{clean_cat}.txt"          # text_en.txt
+        f"{clean_cat}.txt",
+        f"styles_{clean_cat}.txt", 
+        f"{clean_cat}s.txt",
+        f"styles_{clean_cat}s.txt",
+        f"text_{clean_cat}.txt"
     ]
     
-    # 2. 定义搜索目录 (graphic 和 text)
-    # 注意：这里假设您的 parent_dir 已经在文件头部定义好了
-    search_dirs = [
-        os.path.join(parent_dir, "data", "graphic"),
-        os.path.join(parent_dir, "data", "text")
-    ]
+    # 搜索这两个目录
+    target_dirs = ["data/graphic", "data/text"]
     
-    # 3. 遍历查找
-    for d in search_dirs:
-        if os.path.exists(d):
-            # 获取目录下所有真实文件的映射表 (小写名 -> 真实名)
-            try:
-                real_files_map = {f.lower(): f for f in os.listdir(d)}
-                for cand in candidates:
-                    if cand in real_files_map:
-                        return os.path.join(d, real_files_map[cand]) # 找到真身
-            except:
-                continue
-    
-    # 4. 实在找不到，默认在 graphic 下按原名创建
-    return os.path.join(parent_dir, "data", "graphic", f"{category}.txt")
+    for d in target_dirs:
+        try:
+            # 获取该目录下所有文件内容
+            contents = repo.get_contents(d)
+            for content_file in contents:
+                if content_file.name.lower() in candidates:
+                    return content_file.path # 找到了，返回比如 data/graphic/styles_color.txt
+        except:
+            continue
+            
+    # 没找到就默认路径
+    return f"data/graphic/{category}.txt"
 
 def save_category_to_disk(category, new_list):
     """
-    使用智能寻路，强制覆写文件
+    通过 GitHub API 提交 Commit
     """
-    # 找到真实路径
-    file_path = find_real_file_path(category)
+    repo = get_repo_connection()
+    if not repo: return False
+    
+    # 1. 找到仓库里的文件路径
+    file_path = find_remote_file_path(repo, category)
+    
+    # 2. 准备内容
+    content_str = "\n".join([str(x).strip() for x in new_list if str(x).strip()])
+    branch = st.secrets["general"].get("BRANCH", "main")
     
     try:
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, "w", encoding="utf-8") as f:
-            # 过滤空行并写入
-            clean_list = [str(item).strip() for item in new_list if str(item).strip()]
-            f.write("\n".join(clean_list))
+        # 3. 尝试获取现有文件 (为了拿到 sha 校验码，更新必须要有 sha)
+        contents = repo.get_contents(file_path, ref=branch)
         
-        print(f"✅ 已同步写入硬盘: {os.path.basename(file_path)}") # 控制台日志
-        return True, file_path
+        # 4. 更新文件 (Commit)
+        repo.update_file(
+            path=contents.path,
+            message=f"Update {category} via Streamlit App",
+            content=content_str,
+            sha=contents.sha,
+            branch=branch
+        )
+        print(f"✅ [GitHub Commit] 更新成功: {file_path}")
+        st.toast(f"云端同步成功: {file_path}", icon="☁️")
+        return True
+        
     except Exception as e:
-        print(f"❌ 写入失败 {category}: {e}")
-        return False, str(e)
+        # 如果文件不存在，创建新文件
+        try:
+            repo.create_file(
+                path=file_path,
+                message=f"Create {category} via Streamlit App",
+                content=content_str,
+                branch=branch
+            )
+            print(f"✅ [GitHub Create] 新建成功: {file_path}")
+            st.toast(f"云端新建成功: {file_path}", icon="✨")
+            return True
+        except Exception as create_e:
+            print(f"❌ [GitHub Error] {create_e}")
+            st.error(f"同步失败: {create_e}")
+            return False
 # ===========================
 # 2. 页面初始化
 # ===========================
