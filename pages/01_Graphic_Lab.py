@@ -49,7 +49,7 @@ def assemble_weighted_skeleton(user_input):
     逻辑：Intent -> 多重Subject -> 核心Action -> 核心Mood -> 其他配料
     """
     # 1. 抽取多重主体 (2-3个)
-    sub_count = random.randint(2, 3)
+    sub_count = random.randint(1, 2)
     subjects = smart_pick("Subject", sub_count)
     if user_input.strip():
         subjects = [user_input.strip()] + subjects[:sub_count-1]
@@ -61,7 +61,7 @@ def assemble_weighted_skeleton(user_input):
     # 3. 基础配料
     s_sys   = " ".join(smart_pick("StyleSystem", 1))
     s_tech  = " ".join(smart_pick("Technique", 1))
-    s_col   = " ".join(smart_pick("Color", 1))
+    s_col   = " ".join(smart_pick("Color", 2))
     s_tex   = " ".join(smart_pick("Texture", 1))
     s_comp  = " ".join(smart_pick("Composition", 1))
     usage   = " ".join(smart_pick("Usage", 1))
