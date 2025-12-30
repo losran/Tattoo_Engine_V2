@@ -1,212 +1,185 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import json
 import urllib.parse
 import re
-import os
-import sys
-
-# ===========================
-# 0. 基础路径 & 样式
-# ===========================
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
-if parent_dir not in sys.path:
-    sys.path.append(parent_dir)
-
 from engine_manager import render_sidebar, init_data
 from style_manager import apply_pro_style
 
+# ===========================
+# 1. 页面配置与初始化
+# ===========================
 st.set_page_config(layout="wide", page_title="Automation Central")
-apply_pro_style() # 保持好看的 Pro 样式
+apply_pro_style()
 render_sidebar()
 init_data()
 
 # ===========================
-# 1. 样式增强 (复刻 v16 时的输入框样式)
-# ===========================
-st.markdown("""
-<style>
-    .stTextArea textarea {
-        background-color: #0d1117 !important;
-        border: 1px solid #30363d !important;
-        color: #c9d1d9 !important;
-        font-family: 'Consolas', 'Monaco', monospace;
-    }
-    .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #ff4b4b 0%, #d62f2f 100%) !important;
-        box-shadow: 0 4px 15px rgba(255, 75, 75, 0.2) !important;
-        height: 50px !important;
-        font-weight: bold !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-st.title("🤖 自动化任务分发")
-
-# ===========================
-# 2. 数据接通 (这是唯一必须加的功能，不然无法读取)
+# 2. 数据接收与同步
 # ===========================
 if "global_queue" not in st.session_state:
     st.session_state.global_queue = []
 
-# 从 global_queue 获取数据
-default_text = ""
+# 获取全量文本用于编辑或展示
+current_queue_text = ""
 if st.session_state.global_queue:
-    valid_tasks = [t for t in st.session_state.global_queue if t.strip()]
-    default_text = "\n\n".join(valid_tasks)
-else:
-    # 兼容旧缓存
-    default_text = st.session_state.get('auto_input_cache', "") or st.session_state.get('polished_text', "")
+    current_queue_text = "\n\n".join(st.session_state.global_queue)
 
 # ===========================
-# 3. 界面布局
+# 3. 极简 UI 呈现
 # ===========================
-col_opt1, col_opt2 = st.columns([2, 1])
-with col_opt1:
-    target_platform = st.selectbox(
-        "选择目标 AI 平台", 
-        ["万能自适应 (推荐)", "ChatGPT", "Doubao (豆包/镜像站)", "Claude"],
-        help="不同平台输入框构造不同，手动选择更精准"
-    )
+st.markdown("## Automation Central")
+st.caption("Universal AI Platform Adaptor")
 
-with col_opt2:
-    st.write("") # 排版占位
-    if st.button("🗑️ 清空队列", use_container_width=True):
+col_info, col_clear = st.columns([4, 1])
+with col_info:
+    st.markdown(f"**Pending Tasks:** {len(st.session_state.global_queue)}")
+with col_clear:
+    if st.button("Clear Queue", use_container_width=True):
         st.session_state.global_queue = []
-        st.session_state.auto_input_cache = ""
-        st.session_state.polished_text = ""
         st.rerun()
 
-user_input = st.text_area("检查待处理的提示词内容：", value=default_text, height=300, key="main_input_area")
+# 核心：直接全量呈现编辑器，不再使用下拉框
+user_input = st.text_area(
+    "Queue Preview", 
+    value=current_queue_text, 
+    height=350, 
+    placeholder="Waiting for tasks from Studio...",
+    label_visibility="collapsed"
+)
 
-# 双向绑定
-if user_input != default_text:
+# 同步编辑内容
+if user_input != current_queue_text:
     st.session_state.global_queue = [t.strip() for t in user_input.split('\n\n') if t.strip()]
 
 st.divider()
 
 # ===========================
-# 4. 核心逻辑 (100% 还原 V16.0 JS 代码)
+# 4. 万能脚本生成逻辑
 # ===========================
-col_check, col_btn = st.columns([1, 2])
-with col_check:
-    need_white_bg = st.checkbox("🏭 生产模式：每张图后自动生成白底图", value=False)
+if st.button("⚡ Generate Universal Script", type="primary", use_container_width=True):
+    # A. 精准解析方案内容
+    task_list = []
+    if user_input:
+        # 使用正则提取 "**方案N：" 之后的内容，或者直接按空行切分
+        segments = re.split(r"\*\*方案\d+：\*\*", user_input)
+        for seg in segments:
+            clean = seg.strip()
+            # 过滤掉无用的后缀提示词
+            clean = clean.split("(Invalid")[0].split("(Connection")[0].split("(Offline")[0].strip()
+            if len(clean) > 2:
+                task_list.append(clean.replace("\n", " "))
 
-with col_btn:
-    if st.button("🚀 生成全能适配脚本 (v16.0 深度加固版)", type="primary", use_container_width=True):
-        task_list = []
-        if user_input:
-            # V16.0 的切分逻辑
-            if "###" in user_input:
-                raw_tasks = [t.strip() for t in user_input.split("###") if len(t.strip()) > 5]
-            else:
-                # 增强正则
-                blocks = re.split(r'(?:\*\*)?方案[一二三四五六七八九十\d]+[:：\s]?(?:\*\*)?', user_input)
-                raw_tasks = [b.strip() for b in blocks if len(b.strip()) > 10]
+    if task_list:
+        encoded_data = urllib.parse.quote(json.dumps(task_list))
+        
+        # --- 核心万能适配 JS 脚本 ---
+        js_code = f"""(async function() {{
+            console.clear();
+            console.log("%c 🚀 Universal Automation Started ", "background: #000; color: #0f0; font-size: 14px");
+            window.kill = false;
+            const tasks = JSON.parse(decodeURIComponent("{encoded_data}"));
             
-            # 如果没正则切分出来，尝试简单的换行切分
-            if not raw_tasks:
-                 raw_tasks = [t.strip() for t in user_input.split('\n\n') if len(t.strip()) > 5]
+            // 状态条组件
+            function showStatus(text, color = "#333") {{
+                let el = document.getElementById('magic-status-bar');
+                if (!el) {{
+                    el = document.createElement('div');
+                    el.id = 'magic-status-bar';
+                    el.style.cssText = "position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:999999; padding:8px 16px; border-radius:4px; font-family:sans-serif; font-size:13px; font-weight:bold; color:#fff; box-shadow:0 5px 15px rgba(0,0,0,0.3); transition: all 0.3s;";
+                    document.body.appendChild(el);
+                }}
+                el.textContent = text;
+                el.style.backgroundColor = color;
+            }}
 
-            # 生产模式插入白底图指令
-            for t in raw_tasks:
-                task_list.append(t)
-                if need_white_bg:
-                    task_list.append("生成上图的白底平面图，去除背景，纯白底， isolated on white background")
+            // 万能输入框查找器
+            function getInputBox() {{
+                const selectors = ['#prompt-textarea', '[contenteditable="true"]', 'textarea', '[data-testid="text-input"]', '.chat-input-textarea'];
+                for (let s of selectors) {{
+                    let el = document.querySelector(s);
+                    if (el) return el;
+                }}
+                return null;
+            }}
 
-        if task_list:
-            encoded_data = urllib.parse.quote(json.dumps(task_list))
+            // 万能发送按钮查找器
+            function getSendBtn() {{
+                return document.querySelector('[data-testid="send-button"]') || 
+                       document.querySelector('button[aria-label="Send prompt"]') ||
+                       document.querySelector('button[aria-label="发送"]') ||
+                       document.querySelector('button[aria-label="Send"]');
+            }}
 
-            # 🔥🔥🔥 V16.0 原版 JS 代码 (一个字都没改) 🔥🔥🔥
-            js_code = f"""(async function() {{
-                window.kill = false;
-                const tasks = JSON.parse(decodeURIComponent("{encoded_data}"));
+            showStatus("🚀 Loaded " + tasks.length + " tasks", "#444"); 
+            
+            for (let i = 0; i < tasks.length; i++) {{
+                if (window.kill) {{ showStatus("🛑 Stopped", "#d32f2f"); break; }}
                 
-                function showStatus(text, color = "#6366f1") {{
-                    let el = document.getElementById('magic-status-bar');
-                    if (!el) {{
-                        el = document.createElement('div');
-                        el.id = 'magic-status-bar';
-                        el.style.cssText = "position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:9999999; padding:12px 24px; border-radius:30px; font-family:sans-serif; font-size:14px; font-weight:bold; color:#fff; box-shadow:0 10px 25px rgba(0,0,0,0.4); transition: all 0.3s;";
-                        document.body.appendChild(el);
-                    }}
-                    el.textContent = text;
-                    el.style.backgroundColor = color;
+                let box = getInputBox();
+                if (!box) {{ 
+                    showStatus("⚠️ Waiting for Input Box...", "#f57c00");
+                    await new Promise(r => setTimeout(r, 2000));
+                    box = getInputBox();
                 }}
-
-                function getInputBox() {{
-                    return document.querySelector('#prompt-textarea, [contenteditable="true"], textarea, .n-input__textarea-el, [placeholder*="输入"], [placeholder*="提问"]');
+                
+                showStatus("✍️ Task " + (i+1) + "/" + tasks.length, "#1976d2");
+                box.focus();
+                
+                // 输入注入
+                if (box.tagName === 'DIV' || box.contentEditable === "true") {{
+                    box.innerText = tasks[i]; 
+                }} else {{
+                    box.value = tasks[i];
                 }}
+                
+                // 触发页面监听事件
+                box.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                box.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                await new Promise(r => setTimeout(r, 800)); 
 
-                async function safeInput(box, text) {{
-                    box.focus();
-                    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set 
-                                || Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, "innerText")?.set;
-                    if (box.tagName === 'DIV') box.innerText = text;
-                    else setter ? setter.call(box, text) : (box.value = text);
-                    box.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                // 点击发送
+                let sendBtn = getSendBtn();
+                if (sendBtn && !sendBtn.disabled) {{
+                    sendBtn.click();
+                }} else {{
+                    // 如果找不到按钮或按钮禁用，尝试模拟 Enter
+                    box.dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }}));
                 }}
-
-                showStatus("🚀 脚本启动 (v16.0)", "#6366f1");
-
-                for (let i = 0; i < tasks.length; i++) {{
-                    if (window.kill) {{ showStatus("🛑 已停止", "#ef4444"); break; }}
-                    
-                    showStatus(`✍️ 正在输入: ${{i+1}}/${{tasks.length}}`, "#3b82f6");
-                    let box = getInputBox();
-                    if (!box) {{ showStatus("❌ 未找到输入框", "#ef4444"); break; }}
-                    
-                    await safeInput(box, tasks[i]);
-                    await new Promise(r => setTimeout(r, 1000));
-
-                    let btns = Array.from(document.querySelectorAll('button, [role="button"]'));
-                    let sendBtn = btns.find(b => {{
-                        const t = (b.innerText || b.ariaLabel || b.className || "").toLowerCase();
-                        return (t.includes('发') || t.includes('send') || b.getAttribute('data-testid') === 'send-button') && !b.disabled && b.offsetParent !== null;
-                    }});
-
-                    if (sendBtn) sendBtn.click();
-                    else box.dispatchEvent(new KeyboardEvent('keydown', {{bubbles:true, key:'Enter', code:'Enter', keyCode:13, ctrlKey: true}}));
-
+                
+                // 智能冷却与检测
+                if (i < tasks.length - 1) {{
+                    showStatus("⏳ Cooldown...", "#616161");
                     await new Promise(r => setTimeout(r, 4000));
-                    let waitTime = 0;
-                    while(!window.kill) {{
-                        const isGenerating = Array.from(document.querySelectorAll('button')).some(b => {{
-                            const t = (b.innerText || b.ariaLabel || "").toLowerCase();
-                            return t.includes('stop') || t.includes('停止') || t.includes('generating');
-                        }});
-                        if (!isGenerating) break;
-                        showStatus(`🎨 作画中 (${{waitTime}}s)...`, "#8b5cf6");
-                        await new Promise(r => setTimeout(r, 1000));
-                        if (waitTime++ > 180) break;
-                    }}
-
-                    if (i < tasks.length - 1) {{
-                        for (let s = 5; s > 0; s--) {{
-                            if (window.kill) break;
-                            showStatus(`⏳ 冷却等待: ${{s}}s`, "#f59e0b");
+                    
+                    let waitSec = 0;
+                    while(true) {{
+                        if (window.kill) break;
+                        // 适配多种停止/生成中状态
+                        let isGenerating = document.querySelector('[aria-label="Stop generating"]') || 
+                                           document.querySelector('.stop-button') || 
+                                           document.querySelector('button[aria-label="停止"]');
+                        
+                        if (isGenerating) {{
+                            showStatus("🎨 AI Generating (" + waitSec + "s)...", "#7b1fa2");
                             await new Promise(r => setTimeout(r, 1000));
+                            waitSec++;
+                            if (waitSec > 300) break; // 超时退出
+                        }} else {{
+                            break; 
                         }}
                     }}
+                    showStatus("✅ Next in 3s...", "#388e3c");
+                    await new Promise(r => setTimeout(r, 3000));
                 }}
-                showStatus("🎉 任务全部完成！", "#10b981");
-                setTimeout(() => document.getElementById('magic-status-bar')?.remove(), 5000);
-            }})();"""
+            }}
+            if(!window.kill) showStatus("🎉 All Done!", "#2e7d32");
+        }})();"""
 
-            # 自动复制
-            js_val = json.dumps(js_code)
-            components.html(f"""
-            <script>
-                const text = {js_val};
-                if (navigator.clipboard) {{
-                    navigator.clipboard.writeText(text).then(() => console.log('Copied')).catch(err => console.log('Err', err));
-                }}
-            </script>
-            """, height=0)
-
-            st.success(f"✅ 已生成 {len(task_list)} 条任务指令！")
-            with st.expander("查看生成的代码"):
-                st.code(js_code, language="javascript")
-        else:
-            st.error("❌ 未识别到任务，请确保包含 '方案' 或 '###'")
+        st.success(f"✅ Ready! ({len(task_list)} Tasks Parsed)")
+        
+        # 胶囊呈现
+        with st.expander("📦 Get Universal Script", expanded=True):
+            st.code(js_code, language="javascript")
+        st.caption("Tip: Copy the code, F12 on ChatGPT/Gemini/Doubao, paste into Console and Enter.")
+    else:
+        st.error("No valid tasks found in the queue.")
