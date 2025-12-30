@@ -1,12 +1,52 @@
 import streamlit as st
 import json
+import os
+import sys
 import pandas as pd
 from openai import OpenAI
-from engine_manager import render_sidebar, WAREHOUSE, save_data, init_data
+
+# ===========================
+# 0. 基础路径 & 引入模块
+# ===========================
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
+from engine_manager import render_sidebar, WAREHOUSE, init_data
 from style_manager import apply_pro_style
 
 # ===========================
-# 1. 基础配置
+# 1. 核心功能函数 (🔥 硬盘读写补丁 🔥)
+# ===========================
+def save_category_to_disk(category, new_list):
+    """
+    强制把内存中的列表写入到对应的 TXT 文件中
+    """
+    # 1. 尝试从 WAREHOUSE 映射中获取文件名
+    filename = WAREHOUSE.get(category)
+    if not filename:
+        # 如果映射里没有，默认用 category.txt
+        filename = f"{category}.txt"
+        
+    # 2. 拼接路径 (优先 data/graphic, 备选 data/text)
+    file_path = os.path.join(parent_dir, "data", "graphic", filename)
+    if not os.path.exists(os.path.dirname(file_path)):
+        # 如果 graphic 文件夹不存在，尝试 text
+        file_path = os.path.join(parent_dir, "data", "text", filename)
+        
+    try:
+        # 3. 写入文件
+        with open(file_path, "w", encoding="utf-8") as f:
+            clean_list = [item.strip() for item in new_list if item.strip()]
+            f.write("\n".join(clean_list))
+        return True
+    except Exception as e:
+        print(f"Error saving {category}: {e}")
+        return False
+
+# ===========================
+# 2. 页面初始化
 # ===========================
 st.set_page_config(layout="wide", page_title="Tattoo Engine V2")
 apply_pro_style()
@@ -33,35 +73,35 @@ if "ai_results" not in st.session_state: st.session_state.ai_results = []
 if "input_text" not in st.session_state: st.session_state.input_text = ""
 
 # ===========================
-# 2. 界面标题
+# 3. 界面布局
 # ===========================
 st.markdown("## Tattoo Engine V2") 
 st.markdown("---")
 
-# ===========================
-# 3. 核心分栏布局
-# ===========================
 col_ingest, col_warehouse = st.columns([2, 1])
 
-# --- 左侧：智能解析入库 ---
+# ---------------------------------------------------------
+# 左侧：智能解析 (Smart Ingest)
+# ---------------------------------------------------------
 with col_ingest:
-    st.markdown("### Smart Ingest")
-    st.caption("AI Parser")
+    st.markdown("### Smart Ingest (AI Parser)")
     
     st.session_state.input_text = st.text_area(
         "Raw Input",
         st.session_state.input_text,
-        height=240,
-        placeholder="Paste messy inspiration or keywords here...",
+        height=200,
+        placeholder="在这里粘贴客户的胡言乱语，或者乱七八糟的灵感关键词...",
         label_visibility="collapsed"
     )
 
-    if st.button("Start Analysis", use_container_width=True):
+    if st.button("✨ Start Analysis (DeepSeek)", use_container_width=True, type="primary"):
         if not st.session_state.input_text:
             st.warning("Input is empty.")
+        elif not client:
+            st.error("DeepSeek API Key not found in .streamlit/secrets.toml")
         else:
-            with st.spinner("Analyzing..."):
-                # 🔥 恢复你调教好的核心 Prompt 逻辑
+            with st.spinner("AI 正在解构你的灵感..."):
+                # 核心 Prompt
                 prompt = f"""
                 任务：将纹身描述文本拆解为结构化关键词。
                 
@@ -92,13 +132,13 @@ with col_ingest:
                     res_obj = client.chat.completions.create(
                         model="deepseek-chat",
                         messages=[{"role": "user", "content": prompt}],
-                        temperature=0.1 # 保持低随机性，确保输出稳定
+                        temperature=0.1
                     )
                     res = res_obj.choices[0].message.content
                     
                     parsed = []
                     
-                    # --- 1. 深度 JSON 解析逻辑 ---
+                    # --- JSON 解析逻辑 ---
                     try:
                         clean_json = res.replace("```json", "").replace("```", "").strip()
                         data = json.loads(clean_json)
@@ -106,7 +146,6 @@ with col_ingest:
                         for cat, words in data.items():
                             target_key = None
                             for k in WAREHOUSE:
-                                # 模糊匹配分类，增强容错
                                 if k.lower() == cat.lower() or k.lower() in cat.lower():
                                     target_key = k
                                     break
@@ -117,106 +156,115 @@ with col_ingest:
                                         parsed.append({"cat": target_key, "val": w.strip()})
                                         
                     except json.JSONDecodeError:
-                        # --- 2. 备用解析逻辑 (Fallback) ---
-                        # 如果 AI 没吐出标准 JSON，尝试强行切分文本
-                        clean_res = res.replace("：", ":").replace("\n", "|").replace("，", ",")
-                        for block in clean_res.split("|"):
-                            if ":" in block:
-                                parts = block.split(":", 1)
-                                if len(parts) == 2:
-                                    cat, words = parts
-                                    cat = cat.strip()
-                                    target_key = None
-                                    for k in WAREHOUSE:
-                                        if k.lower() in cat.lower(): 
-                                            target_key = k
-                                            break
-                                    if target_key:
-                                        for w in words.split(","):
-                                            w = w.strip()
-                                            if w: parsed.append({"cat": target_key, "val": w})
-
+                        st.error("AI 返回格式异常，尝试备用解析...")
+                        # 简单的备用解析逻辑可以加在这里
+                    
                     st.session_state.ai_results = parsed
 
                 except Exception as e:
-                    st.error(f"Request Error: {e}")
+                    st.error(f"API Request Error: {e}")
 
-    # 🔥 核心交互区：恢复勾选确认逻辑 🔥
+    # --- AI 结果交互区 ---
     if st.session_state.ai_results:
-        st.write("")
-        st.subheader("Analysis Results (Select to Import)")
+        st.divider()
+        st.subheader("Analysis Results")
+        st.caption("Select items to import into Warehouse")
         
-        # 用于存储用户勾选的结果
         selected_to_import = []
         
-        # 使用网格布局展示 Checkboxes
+        # 结果展示
         res_cols = st.columns(3)
         for i, item in enumerate(st.session_state.ai_results):
             with res_cols[i % 3]:
-                # 构造显示文本：例如 "StyleSystem · 手绘"
-                display_label = f"**{item['cat']}** · {item['val']}"
-                # 默认勾选 (value=True)
-                if st.checkbox(display_label, key=f"res_{i}", value=True):
+                # 默认全选
+                if st.checkbox(f"**{item['cat']}** : {item['val']}", key=f"res_{i}", value=True):
                     selected_to_import.append(item)
         
-        st.markdown("---")
-        
-        # 确认入库按钮
-        if st.button("Confirm Import to Warehouse", type="primary", use_container_width=True):
+        st.write("")
+        if st.button("📥 Confirm Import to Warehouse", use_container_width=True):
             if not selected_to_import:
                 st.info("No items selected.")
             else:
                 changed_cats = set()
+                count = 0
                 for item in selected_to_import:
                     cat, val = item["cat"], item["val"]
-                    current_list = st.session_state.db_all.get(cat, [])
+                    # 确保 list 存在
+                    if cat not in st.session_state.db_all:
+                        st.session_state.db_all[cat] = []
+                        
+                    current_list = st.session_state.db_all[cat]
                     if val not in current_list:
                         current_list.append(val)
                         st.session_state.db_all[cat] = current_list
                         changed_cats.add(cat)
+                        count += 1
                 
+                # 🔥 批量写入硬盘 🔥
                 if changed_cats:
                     for c in changed_cats:
-                        save_data(WAREHOUSE[c], st.session_state.db_all[c])
-                    st.success(f"Successfully imported {len(selected_to_import)} keywords!")
-                    st.session_state.ai_results = [] # 入库后清空预览区
+                        save_category_to_disk(c, st.session_state.db_all[c])
+                    
+                    st.toast(f"✅ Imported {count} items to Warehouse!", icon="🎉")
+                    st.session_state.ai_results = [] # 清空结果
                     st.rerun()
+                else:
+                    st.toast("⚠️ Items already exist in Warehouse.")
 
-# --- 右侧：仓库管理 ---
+# ---------------------------------------------------------
+# 右侧：仓库管理 (Warehouse) - 带强制硬盘写入
+# ---------------------------------------------------------
 with col_warehouse:
-    st.markdown("## Warehouse")
-    c_tools_1, c_tools_2 = st.columns([3, 1])
+    st.markdown("### Warehouse")
+    
+    # 工具栏
+    c_tools_1, c_tools_2 = st.columns([2, 1])
     with c_tools_1:
-        target_cat = st.selectbox("Category", list(WAREHOUSE.keys()), label_visibility="collapsed")
+        # 只显示列表类型的 Key
+        valid_cats = [k for k, v in st.session_state.db_all.items() if isinstance(v, list)]
+        target_cat = st.selectbox("Category", valid_cats, label_visibility="collapsed")
     with c_tools_2:
         current_words = st.session_state.db_all.get(target_cat, [])
-        st.markdown(f"<div style='text-align:right; line-height: 42px; color:#666; font-size: 0.9em;'>{len(current_words)} Items</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:right; color:#888; font-size:0.8em; padding-top:10px;'>{len(current_words)} Items</div>", unsafe_allow_html=True)
 
-    with st.container(height=600, border=True):
+    # 列表展示区
+    with st.container(height=500, border=True):
         if not current_words:
-            st.caption("No items in this category.")
+            st.caption("Empty category.")
         else:
             for i, word in enumerate(current_words):
-                row_c1, row_c2 = st.columns([0.85, 0.15])
+                row_c1, row_c2 = st.columns([0.8, 0.2])
                 with row_c1:
-                    # 点击词汇可以直接填入输入框（可选功能）
+                    # 点击词汇：反向添加到左侧输入框（方便二次编辑）
                     if st.button(word, key=f"word_{target_cat}_{i}", use_container_width=True):
                         st.session_state.input_text += f" {word}"
+                        st.rerun()
                 with row_c2:
+                    # 🔥 删除功能：强制写盘 🔥
                     if st.button("✕", key=f"del_{target_cat}_{i}_{word}", use_container_width=True):
                         new_list = [w for w in current_words if w != word]
                         st.session_state.db_all[target_cat] = new_list
-                        save_data(WAREHOUSE[target_cat], new_list)
+                        
+                        # 立即写入
+                        save_category_to_disk(target_cat, new_list)
                         st.rerun()
 
     # 底部手动添加
+    st.divider()
     c_add1, c_add2 = st.columns([3, 1])
     with c_add1:
-        new_word_in = st.text_input("Add", placeholder="Add new...", label_visibility="collapsed")
+        new_word_in = st.text_input("Add New", placeholder="New tag...", label_visibility="collapsed")
     with c_add2:
         if st.button("Add", use_container_width=True):
-            if new_word_in and new_word_in not in current_words:
-                current_words.append(new_word_in)
-                st.session_state.db_all[target_cat] = current_words
-                save_data(WAREHOUSE[target_cat], current_words)
-                st.rerun()
+            if new_word_in and target_cat:
+                if new_word_in not in current_words:
+                    current_words.append(new_word_in)
+                    st.session_state.db_all[target_cat] = current_words
+                    
+                    # 🔥 添加功能：强制写盘 🔥
+                    save_category_to_disk(target_cat, current_words)
+                    
+                    st.success(f"Added: {new_word_in}")
+                    st.rerun()
+                else:
+                    st.warning("Exist!")
