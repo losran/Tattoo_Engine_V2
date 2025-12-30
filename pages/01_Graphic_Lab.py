@@ -120,24 +120,40 @@ if st.button("一键生成高权重方案", type="primary", use_container_width=
     st.session_state.graphic_solutions = [] 
     placeholders = []   
     skeletons = []      
-    subject_anchors = [] 
     
-    # --- 第一阶段：骨架生成 ---
+    # --- 第一阶段：拼盘 (牛肉火锅逻辑) ---
     for i in range(qty):
         ph = st.empty()
         placeholders.append(ph)
-        sk, subs = assemble_weighted_skeleton(user_idea)
+        
+        # 1. 先抓随机配菜 (不管有没有输入，先备好料)
+        # 注意：这里直接从 db_all 取，不再调用复杂的 assemble 函数
+        r_style = random.choice(st.session_state.db_all.get("StyleSystem", ["插画风格"]))
+        r_subject = random.choice(st.session_state.db_all.get("Subject", ["几何"]))
+        r_tech = random.choice(st.session_state.db_all.get("Technique", ["线条"]))
+        r_color = random.choice(st.session_state.db_all.get("Color", ["黑白"]))
+        
+        # 2. 组合 (你的词在最前面，权重最高)
+        if user_idea and user_idea.strip():
+            # 逻辑：[你的输入] + [随机风格] + [随机主体] + [随机技法] + [随机颜色]
+            sk = f"{user_idea.strip()}, {r_style}, {r_subject}, {r_tech}, {r_color}"
+        else:
+            # 逻辑：[随机风格] + [随机主体] + [随机技法] + [随机颜色]
+            sk = f"{r_style}, {r_subject}, {r_tech}, {r_color}"
+            
         skeletons.append(sk)
-        subject_anchors.append(subs)
         
         with ph.container(border=True):
-            st.markdown(f"**方案{i+1}：** {sk}")
-            st.caption("正在进行深度叙事润色...") 
+            st.markdown(f"**方案{i+1} (骨架)：** `{sk}`")
+            st.caption("⏳ 正在进行深度叙事润色...") 
     
     # --- 第二阶段：AI 深度润色指令 ---
-    sys_prompt = """你是一位顶级的纹身艺术策展人与视觉叙事大师。
-    你的任务是将干燥的关键词转化为极具冲击力、充满灵魂的纹身设计方案。必须严格保留骨架中的风格、颜色、部位等关键信息。
-    每段描述必须包含'微型纹身'二字，语言风格：高级、艺术感、富有画面张力。极力放大【核心动作】的动态张力,深度渲染【氛围基调】的情绪感染力.
+    sys_prompt = """你是一位顶级的纹身艺术策展人。
+    任务：将给定的【关键词骨架】转化为极具冲击力的纹身设计方案。
+    规则：
+    1. 必须保留骨架中所有的关键词信息，特别是排在第一位的用户核心词。
+    2. 描述必须包含'微型纹身'二字。
+    3. 语言风格：高级、艺术感、富有画面张力。
     """
 
     final_results = []
@@ -145,16 +161,14 @@ if st.button("一键生成高权重方案", type="primary", use_container_width=
     for i, sk in enumerate(skeletons):
         idx = i + 1
         ph = placeholders[i]
-        anchors = "、".join(subject_anchors[i])
         
         user_prompt = f"""
-        【原始骨架信息】：{sk}
-        【必须保留的主体】：{anchors}
+        【原始关键词骨架】：{sk}
         
         【定制指令】：
         1. 严格以 "**方案{idx}：**" 开头。
-        2. 将字数扩展至 80-120 字，增加对动作和情绪的文学化描写。
-        3. 将多个主体有机融合，构建一个有故事感的视觉画面。确保视觉描述能够指导 Midjourney 生成高品质图像。
+        2. 将字数扩展至 80-120 字。
+        3. 这是一个组合任务：请将骨架里的关键词（{sk}）有机融合，不要遗漏用户输入的词。
         """
         
         try:
@@ -178,8 +192,7 @@ if st.button("一键生成高权重方案", type="primary", use_container_width=
         final_results.append(full_response)
 
     st.session_state.graphic_solutions = final_results
-    st.rerun()
-
+    # 这里不需要 st.rerun()，否则字还没打完就刷新了
 # ===========================
 # 5. 结果展示
 # ===========================
