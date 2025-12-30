@@ -207,7 +207,7 @@ if st.button("⚡ Generate Safe-Wait Script (30s Delay)", type="primary", use_co
                     }}
 
                     // 3. HARD 30s Cooldown (User Request)
-                    for (let s = 30; s > 0; s--) {{
+                    for (let s = 120; s > 0; s--) {{
                          if (window.kill) break;
                          showStatus("☕ Cooldown: " + s + "s", "#f57c00");
                          await new Promise(r => setTimeout(r, 1000));
