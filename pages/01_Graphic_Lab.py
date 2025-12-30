@@ -45,45 +45,58 @@ def smart_pick(category, count=1):
 
 def assemble_weighted_skeleton(user_input):
     """
-    【高权重组装引擎】
-    逻辑：Intent -> 多重Subject -> 核心Action -> 核心Mood -> 其他配料
+    【融合版组装引擎：高权重 + 混沌灵性】
+    修复重复感问题，恢复随机惊喜
     """
-    # 1. 抽取多重主体 (2-3个)
-    sub_count = random.randint(1, 2)
-    subjects = smart_pick("Subject", sub_count)
+    # 1. 主体逻辑：尊重用户输入 (关键修改)
+    # 如果用户有输入，不再强制拼接数据库元素，除非用户输入很少
     if user_input.strip():
-        subjects = [user_input.strip()] + subjects[:sub_count-1]
-    
-    # 2. 强化配料
-    action = " ".join(smart_pick("Action", 2))
-    mood = " ".join(smart_pick("Mood", 2))
-    
-    # 3. 基础配料
-    s_sys   = " ".join(smart_pick("StyleSystem", 1))
-    s_tech  = " ".join(smart_pick("Technique", 1))
-    s_col   = " ".join(smart_pick("Color", 2))
-    s_tex   = " ".join(smart_pick("Texture", 1))
-    s_comp  = " ".join(smart_pick("Composition", 1))
-    usage   = " ".join(smart_pick("Usage", 1))
-    s_acc   = " ".join(smart_pick("Accent", 1))
+        subjects = [user_input.strip()]
+        # 只有 30% 的概率在用户输入的基础上再额外加一个数据库元素（制造惊喜，而不是制造干扰）
+        if random.random() > 0.7: 
+            extra_sub = smart_pick("Subject", 1)
+            if extra_sub: subjects.extend(extra_sub)
+    else:
+        # 盲盒模式：随机 1-2 个主体
+        sub_count = random.randint(1, 2)
+        subjects = smart_pick("Subject", sub_count)
 
-    # 4. 组装逻辑：将动作和情绪前置，增加视觉冲突
-    parts = [
-        f"【核心动作：{action}】",
-        f"【氛围基调：{mood}】",
-        f"主体元素：{' & '.join(subjects)}",
-        f"风格：{s_sys}",
-        f"技法：{s_tech}",
-        f"色调：{s_col}",
-        f"质感：{s_tex}",
-        f"构图：{s_comp}",
-        f"细节：{s_acc}"
-    ]
+    # 2. 动态配料 (恢复随机性，而不是硬塞)
+    # 动作：随机 0-1 个（不再强制 2 个，留白给 AI）
+    action_list = smart_pick("Action", random.randint(0, 1)) 
+    action = action_list[0] if action_list else ""
 
-    raw_chain = " | ".join([p for p in parts if "：" in p and p.split("：")[1].strip()])
+    # 情绪：随机 1 个
+    mood_list = smart_pick("Mood", 1)
+    mood = mood_list[0] if mood_list else ""
     
-    if usage:
-        raw_chain += f" | 纹刺部位：{usage}"
+    # 3. 基础配料 (引入旧版的混沌机制)
+    s_sys   = smart_pick("StyleSystem", 1)
+    s_tech  = smart_pick("Technique", 1)
+    s_col   = smart_pick("Color", 1) # 颜色改回 1 个，避免太乱
+    
+    # 4. 混沌参数 (40% 概率触发额外点缀，重现旧版灵魂)
+    s_acc = ""
+    if random.random() > 0.4: # <--- 这里就是你要的“混沌参数”
+        acc_list = smart_pick("Accent", 1)
+        if acc_list: s_acc = acc_list[0]
+
+    # 5. 组装部分 (使用更柔和的提示词引导)
+    parts = []
+    
+    # 只有存在时才添加，避免空标签
+    if action: parts.append(f"动态：{action}")
+    if mood: parts.append(f"氛围：{mood}")
+    
+    parts.append(f"主体：{' + '.join(subjects)}")
+    
+    if s_sys: parts.append(f"风格：{s_sys[0]}")
+    if s_tech: parts.append(f"技法：{s_tech[0]}")
+    if s_col: parts.append(f"色调：{s_col[0]}")
+    if s_acc: parts.append(f"点缀元素：{s_acc}") # 只有触发了混沌才有
+
+    # 用竖线分割，保留结构感
+    raw_chain = " | ".join(parts)
         
     return raw_chain, subjects
 
