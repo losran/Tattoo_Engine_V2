@@ -22,66 +22,66 @@ from style_manager import apply_pro_style
 # ===========================
 # 1. 核心功能函数 (精准适配 styles_ 前缀和复数)
 # ===========================
+# ===========================
+# 🔥 只替换这部分：智能寻路与强制写盘函数 🔥
+# ===========================
 def find_real_file_path(category):
     """
-    根据您的截图目录结构进行精准查找：
-    1. 尝试 styles_前缀 (如 Color -> styles_color.txt)
-    2. 尝试 复数形式 (如 Action -> actions.txt)
-    3. 尝试 原名 (如 Color -> Color.txt)
+    智能寻路：根据分类名，自动去文件夹里找对应的真实文件。
+    解决 Color -> styles_color.txt 或 Action -> actions.txt 的匹配问题。
     """
-    clean_cat = category.strip().lower() # 转小写，比如 "Color" -> "color"
+    clean_cat = category.strip().lower()
     
-    # 定义所有可能的变体文件名
+    # 1. 构造所有可能的真实文件名 (根据您的文件结构)
     candidates = [
         f"{clean_cat}.txt",              # color.txt
         f"styles_{clean_cat}.txt",       # styles_color.txt (命中!)
-        f"{clean_cat}s.txt",             # colors.txt / actions.txt (命中!)
+        f"{clean_cat}s.txt",             # actions.txt (命中!)
         f"styles_{clean_cat}s.txt",      # styles_colors.txt
-        f"text_{clean_cat}.txt"          # text_en.txt 等
+        f"text_{clean_cat}.txt"          # text_en.txt
     ]
     
-    # 搜索路径
+    # 2. 定义搜索目录 (graphic 和 text)
+    # 注意：这里假设您的 parent_dir 已经在文件头部定义好了
     search_dirs = [
         os.path.join(parent_dir, "data", "graphic"),
         os.path.join(parent_dir, "data", "text")
     ]
     
-    # 1. 遍历文件夹，看看上面哪个文件名是真实存在的
+    # 3. 遍历查找
     for d in search_dirs:
         if os.path.exists(d):
-            existing_files = [f.lower() for f in os.listdir(d)] # 获取目录下所有文件并转小写
-            for cand in candidates:
-                if cand in existing_files:
-                    # 找到了！返回真实路径
-                    # 注意：这里要返回目录下真实的大小写文件名，而不是我们拼出来的
-                    real_name = os.listdir(d)[existing_files.index(cand)]
-                    return os.path.join(d, real_name)
+            # 获取目录下所有真实文件的映射表 (小写名 -> 真实名)
+            try:
+                real_files_map = {f.lower(): f for f in os.listdir(d)}
+                for cand in candidates:
+                    if cand in real_files_map:
+                        return os.path.join(d, real_files_map[cand]) # 找到真身
+            except:
+                continue
     
-    # 2. 如果都没找到，说明是新分类，默认创建最简单的
+    # 4. 实在找不到，默认在 graphic 下按原名创建
     return os.path.join(parent_dir, "data", "graphic", f"{category}.txt")
 
 def save_category_to_disk(category, new_list):
     """
-    使用智能寻路写入文件
+    使用智能寻路，强制覆写文件
     """
-    # 找到那个真正的文件 (比如 styles_color.txt)
+    # 找到真实路径
     file_path = find_real_file_path(category)
     
     try:
-        # 确保目录存在
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        
         with open(file_path, "w", encoding="utf-8") as f:
-            # 过滤空行
+            # 过滤空行并写入
             clean_list = [str(item).strip() for item in new_list if str(item).strip()]
             f.write("\n".join(clean_list))
         
-        # 打印一下调试信息，让你放心
-        print(f"✅ Saved [{category}] to [{os.path.basename(file_path)}]")
-        return True
+        print(f"✅ 已同步写入硬盘: {os.path.basename(file_path)}") # 控制台日志
+        return True, file_path
     except Exception as e:
-        print(f"❌ Error saving {category}: {e}")
-        return False
+        print(f"❌ 写入失败 {category}: {e}")
+        return False, str(e)
 # ===========================
 # 2. 页面初始化
 # ===========================
