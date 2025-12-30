@@ -63,7 +63,7 @@ def assemble_weighted_skeleton(user_input):
 
     # 2. 动态配料 (恢复随机性，而不是硬塞)
     # 动作：随机 0-1 个（不再强制 2 个，留白给 AI）
-    action_list = smart_pick("Action", random.randint(0, 1)) 
+    action_list = smart_pick("Action", random.randint(1, 2)) 
     action = action_list[0] if action_list else ""
 
     # 情绪：随机 1 个
