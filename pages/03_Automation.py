@@ -2,11 +2,22 @@ import streamlit as st
 import json
 import urllib.parse
 import re
+import os
+import sys
+
+# ===========================
+# 0. Basic Setup
+# ===========================
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
 from engine_manager import render_sidebar, init_data
 from style_manager import apply_pro_style
 
 # ===========================
-# 1. 页面配置与初始化
+# 1. Page Config
 # ===========================
 st.set_page_config(layout="wide", page_title="Automation Central")
 apply_pro_style()
@@ -14,21 +25,24 @@ render_sidebar()
 init_data()
 
 # ===========================
-# 2. 数据接收与同步
+# 2. Data Sync
 # ===========================
 if "global_queue" not in st.session_state:
     st.session_state.global_queue = []
 
-# 获取全量文本用于编辑或展示
+# Patch: if queue is empty, try to fetch from Text Studio results
+if not st.session_state.global_queue and "text_solutions" in st.session_state and st.session_state.text_solutions:
+    st.session_state.global_queue = [item["prompt_text"] for item in st.session_state.text_solutions if "prompt_text" in item]
+
 current_queue_text = ""
 if st.session_state.global_queue:
     current_queue_text = "\n\n".join(st.session_state.global_queue)
 
 # ===========================
-# 3. 极简 UI 呈现
+# 3. Minimal UI
 # ===========================
 st.markdown("## Automation Central")
-st.caption("Universal AI Platform Adaptor")
+st.caption("Universal AI Platform Adaptor (Safe Wait Mode)")
 
 col_info, col_clear = st.columns([4, 1])
 with col_info:
@@ -36,9 +50,9 @@ with col_info:
 with col_clear:
     if st.button("Clear Queue", use_container_width=True):
         st.session_state.global_queue = []
+        if "text_solutions" in st.session_state: st.session_state.text_solutions = [] 
         st.rerun()
 
-# 核心：直接全量呈现编辑器，不再使用下拉框
 user_input = st.text_area(
     "Queue Preview", 
     value=current_queue_text, 
@@ -47,39 +61,37 @@ user_input = st.text_area(
     label_visibility="collapsed"
 )
 
-# 同步编辑内容
 if user_input != current_queue_text:
     st.session_state.global_queue = [t.strip() for t in user_input.split('\n\n') if t.strip()]
 
 st.divider()
 
 # ===========================
-# 4. 万能脚本生成逻辑
+# 4. Core Logic (Updated with 30s Wait)
 # ===========================
-if st.button("⚡ Generate Universal Script", type="primary", use_container_width=True):
-    # A. 精准解析方案内容
+if st.button("⚡ Generate Safe-Wait Script (30s Delay)", type="primary", use_container_width=True):
     task_list = []
     if user_input:
-        # 使用正则提取 "**方案N：" 之后的内容，或者直接按空行切分
-        segments = re.split(r"\*\*方案\d+：\*\*", user_input)
-        for seg in segments:
-            clean = seg.strip()
-            # 过滤掉无用的后缀提示词
-            clean = clean.split("(Invalid")[0].split("(Connection")[0].split("(Offline")[0].strip()
-            if len(clean) > 2:
-                task_list.append(clean.replace("\n", " "))
+        if "**方案" in user_input:
+            segments = re.split(r"\*\*方案\d+：\*\*", user_input)
+            for seg in segments:
+                clean = seg.strip()
+                clean = clean.split("(Invalid")[0].split("(Connection")[0].strip()
+                if len(clean) > 2:
+                    task_list.append(clean.replace("\n", " "))
+        else:
+            task_list = [t.strip() for t in user_input.split('\n\n') if len(t.strip()) > 5]
 
     if task_list:
         encoded_data = urllib.parse.quote(json.dumps(task_list))
         
-        # --- 核心万能适配 JS 脚本 ---
+        # --- JS Code with Stricter Checks & 30s Timer ---
         js_code = f"""(async function() {{
             console.clear();
-            console.log("%c 🚀 Universal Automation Started ", "background: #000; color: #0f0; font-size: 14px");
+            console.log("%c 🚀 Safe Automation Started (30s Delay) ", "background: #000; color: #0f0; font-size: 14px");
             window.kill = false;
             const tasks = JSON.parse(decodeURIComponent("{encoded_data}"));
             
-            // 状态条组件
             function showStatus(text, color = "#333") {{
                 let el = document.getElementById('magic-status-bar');
                 if (!el) {{
@@ -92,9 +104,8 @@ if st.button("⚡ Generate Universal Script", type="primary", use_container_widt
                 el.style.backgroundColor = color;
             }}
 
-            // 万能输入框查找器
             function getInputBox() {{
-                const selectors = ['#prompt-textarea', '[contenteditable="true"]', 'textarea', '[data-testid="text-input"]', '.chat-input-textarea'];
+                const selectors = ['#prompt-textarea', '[contenteditable="true"]', 'textarea', '[data-testid="text-input"]', '.chat-input-textarea', '.rich-textarea'];
                 for (let s of selectors) {{
                     let el = document.querySelector(s);
                     if (el) return el;
@@ -102,12 +113,38 @@ if st.button("⚡ Generate Universal Script", type="primary", use_container_widt
                 return null;
             }}
 
-            // 万能发送按钮查找器
             function getSendBtn() {{
-                return document.querySelector('[data-testid="send-button"]') || 
-                       document.querySelector('button[aria-label="Send prompt"]') ||
-                       document.querySelector('button[aria-label="发送"]') ||
-                       document.querySelector('button[aria-label="Send"]');
+                let btn = document.querySelector('[data-testid="send-button"]');
+                if (btn) return btn;
+                btn = document.querySelector('button[aria-label="Send prompt"]') || 
+                      document.querySelector('button[aria-label="发送"]') ||
+                      document.querySelector('button[aria-label="Send"]');
+                if (btn) return btn;
+                let allBtns = Array.from(document.querySelectorAll('button'));
+                return allBtns.find(b => {{
+                    let t = (b.innerText || b.ariaLabel || "").toLowerCase();
+                    let html = b.innerHTML;
+                    if (t.includes('stop') || t.includes('停止')) return false;
+                    return t.includes('send') || t.includes('发送') || html.includes('path') || html.includes('svg');
+                }});
+            }}
+
+            function isBusy() {{
+                // Check 1: Stop buttons
+                let stopBtn = document.querySelector('[aria-label="Stop generating"]') || 
+                              document.querySelector('.stop-button') || 
+                              document.querySelector('button[aria-label="停止"]') ||
+                              document.querySelector('button[aria-label="Stop"]');
+                if (stopBtn) return true;
+
+                // Check 2: Send button state (disabled usually means generating)
+                let sendBtn = getSendBtn();
+                if (sendBtn && sendBtn.disabled) return true;
+                
+                // Check 3: Loading spinners
+                if (document.querySelector('.result-streaming')) return true;
+
+                return false;
             }}
 
             showStatus("🚀 Loaded " + tasks.length + " tasks", "#444"); 
@@ -122,54 +159,59 @@ if st.button("⚡ Generate Universal Script", type="primary", use_container_widt
                     box = getInputBox();
                 }}
                 
-                showStatus("✍️ Task " + (i+1) + "/" + tasks.length, "#1976d2");
-                box.focus();
-                
-                // 输入注入
-                if (box.tagName === 'DIV' || box.contentEditable === "true") {{
-                    box.innerText = tasks[i]; 
-                }} else {{
-                    box.value = tasks[i];
-                }}
-                
-                // 触发页面监听事件
-                box.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                box.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                await new Promise(r => setTimeout(r, 800)); 
-
-                // 点击发送
-                let sendBtn = getSendBtn();
-                if (sendBtn && !sendBtn.disabled) {{
-                    sendBtn.click();
-                }} else {{
-                    // 如果找不到按钮或按钮禁用，尝试模拟 Enter
-                    box.dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }}));
-                }}
-                
-                // 智能冷却与检测
-                if (i < tasks.length - 1) {{
-                    showStatus("⏳ Cooldown...", "#616161");
-                    await new Promise(r => setTimeout(r, 4000));
+                if (box) {{
+                    showStatus("✍️ Writing Task " + (i+1) + "/" + tasks.length, "#1976d2");
+                    box.focus();
                     
+                    let success = false;
+                    try {{ success = document.execCommand('insertText', false, tasks[i]); }} catch(e){{}}
+                    
+                    if (!success) {{
+                        if (box.tagName === 'DIV' || box.contentEditable === "true") {{
+                            box.innerText = tasks[i]; 
+                        }} else {{
+                            box.value = tasks[i];
+                        }}
+                        box.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    }}
+                    
+                    await new Promise(r => setTimeout(r, 1000)); 
+
+                    let sendBtn = getSendBtn();
+                    if (sendBtn && !sendBtn.disabled) {{
+                        sendBtn.click();
+                    }} else {{
+                        box.dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }}));
+                    }}
+                }}
+                
+                // --- Safe Wait Logic ---
+                if (i < tasks.length - 1) {{
+                    // 1. Initial buffer to let generation start
+                    showStatus("⏳ Starting...", "#616161");
+                    await new Promise(r => setTimeout(r, 5000));
+                    
+                    // 2. Wait until system is NOT busy
                     let waitSec = 0;
                     while(true) {{
                         if (window.kill) break;
-                        // 适配多种停止/生成中状态
-                        let isGenerating = document.querySelector('[aria-label="Stop generating"]') || 
-                                           document.querySelector('.stop-button') || 
-                                           document.querySelector('button[aria-label="停止"]');
-                        
-                        if (isGenerating) {{
-                            showStatus("🎨 AI Generating (" + waitSec + "s)...", "#7b1fa2");
+                        if (isBusy()) {{
+                            showStatus("🎨 Generating (" + waitSec + "s)...", "#7b1fa2");
                             await new Promise(r => setTimeout(r, 1000));
                             waitSec++;
-                            if (waitSec > 300) break; // 超时退出
                         }} else {{
-                            break; 
+                            // System seems idle, but let's double check after 2 seconds
+                            await new Promise(r => setTimeout(r, 2000));
+                            if (!isBusy()) break; // Truly idle
                         }}
                     }}
-                    showStatus("✅ Next in 3s...", "#388e3c");
-                    await new Promise(r => setTimeout(r, 3000));
+
+                    // 3. HARD 30s Cooldown (User Request)
+                    for (let s = 30; s > 0; s--) {{
+                         if (window.kill) break;
+                         showStatus("☕ Cooldown: " + s + "s", "#f57c00");
+                         await new Promise(r => setTimeout(r, 1000));
+                    }}
                 }}
             }}
             if(!window.kill) showStatus("🎉 All Done!", "#2e7d32");
@@ -177,8 +219,7 @@ if st.button("⚡ Generate Universal Script", type="primary", use_container_widt
 
         st.success(f"✅ Ready! ({len(task_list)} Tasks Parsed)")
         
-        # 胶囊呈现
-        with st.expander("📦 Get Universal Script", expanded=True):
+        with st.expander("📦 Get Safe-Wait Script", expanded=True):
             st.code(js_code, language="javascript")
         st.caption("Tip: Copy the code, F12 on ChatGPT/Gemini/Doubao, paste into Console and Enter.")
     else:
