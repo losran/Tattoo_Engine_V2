@@ -55,8 +55,8 @@ def assemble_weighted_skeleton(user_input):
         subjects = [user_input.strip()] + subjects[:sub_count-1]
     
     # 2. 强化配料
-    action = " ".join(smart_pick("Action", 1))
-    mood = " ".join(smart_pick("Mood", 1))
+    action = " ".join(smart_pick("Action", 2))
+    mood = " ".join(smart_pick("Mood", 2))
     
     # 3. 基础配料
     s_sys   = " ".join(smart_pick("StyleSystem", 1))
