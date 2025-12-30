@@ -53,7 +53,7 @@ def assemble_weighted_skeleton(user_input):
     if user_input.strip():
         subjects = [user_input.strip()]
         # 只有 30% 的概率在用户输入的基础上再额外加一个数据库元素（制造惊喜，而不是制造干扰）
-        if random.random() > 0.7: 
+        if random.random() > 0.6: 
             extra_sub = smart_pick("Subject", 1)
             if extra_sub: subjects.extend(extra_sub)
     else:
@@ -67,7 +67,7 @@ def assemble_weighted_skeleton(user_input):
     action = action_list[0] if action_list else ""
 
     # 情绪：随机 1 个
-    mood_list = smart_pick("Mood", 1)
+    mood_list = smart_pick("Mood", 2)
     mood = mood_list[0] if mood_list else ""
     
     # 3. 基础配料 (引入旧版的混沌机制)
@@ -136,14 +136,13 @@ if st.button("一键生成高权重方案", type="primary", use_container_width=
     
     # --- 第二阶段：AI 深度润色指令 ---
     sys_prompt = """你是一位顶级的纹身艺术策展人与视觉叙事大师。
-    你的任务是将干燥的关键词转化为极具冲击力、充满灵魂的纹身设计方案。
-    每段描述必须包含'纹身'二字，字数控制在 100-200 字之间。
+    你的任务是将干燥的关键词转化为极具冲击力、充满灵魂的纹身设计方案。必须严格保留骨架中的风格、颜色、部位等关键信息。
+    每段描述必须包含'纹身'二字，字数控制在 120-150 字之间。
     
     润色重点：
     1. 极力放大【核心动作】的动态张力。
     2. 深度渲染【氛围基调】的情绪感染力。
-    3. 将多个主体有机融合，构建一个有故事感的视觉画面。
-    4. 词汇要高级且富有绘画感（如：破碎感、流动性、神圣感、狂乱的线条）。"""
+    3. 将多个主体有机融合，构建一个有故事感的视觉画面。"""
 
     final_results = []
 
