@@ -16,96 +16,91 @@ if parent_dir not in sys.path:
 from engine_manager import render_sidebar, WAREHOUSE, init_data
 from style_manager import apply_pro_style
 
-# ==========================================
-# 🔥 核心：GitHub API 远程写入逻辑 🔥
-# ==========================================
-
-def get_repo_connection():
-    """连接 GitHub 仓库"""
-    try:
-        token = st.secrets["general"]["GITHUB_TOKEN"]
-        repo_name = st.secrets["general"]["REPO_NAME"]
-        g = Github(token)
-        return g.get_repo(repo_name)
-    except Exception as e:
-        st.error(f"GitHub 配置错误: {e}")
-        return None
+# ========================================================
+# 🔥 用这一段替换原来的 find_real_file_path 和 save_category_to_disk 🔥
+# ========================================================
 
 def find_remote_file_path(repo, category):
-    """
-    在 GitHub 仓库里找真实文件路径 (解决 styles_ 前缀问题)
-    """
+    """在 GitHub 仓库里找真实文件路径 (自动匹配 styles_ 等前缀)"""
     clean_cat = category.strip().lower()
     candidates = [
         f"{clean_cat}.txt",
-        f"styles_{clean_cat}.txt", 
+        f"styles_{clean_cat}.txt",
         f"{clean_cat}s.txt",
         f"styles_{clean_cat}s.txt",
         f"text_{clean_cat}.txt"
     ]
     
-    # 搜索这两个目录
-    target_dirs = ["data/graphic", "data/text"]
-    
-    for d in target_dirs:
+    # 搜索 graphic 和 text 目录
+    for d in ["data/graphic", "data/text"]:
         try:
-            # 获取该目录下所有文件内容
             contents = repo.get_contents(d)
-            for content_file in contents:
-                if content_file.name.lower() in candidates:
-                    return content_file.path # 找到了，返回比如 data/graphic/styles_color.txt
+            for file in contents:
+                if file.name.lower() in candidates:
+                    return file.path
         except:
             continue
-            
-    # 没找到就默认路径
+    # 默认路径
     return f"data/graphic/{category}.txt"
 
 def save_category_to_disk(category, new_list):
     """
-    通过 GitHub API 提交 Commit
+    连接 GitHub 并提交修改 (Commit & Push)
     """
-    repo = get_repo_connection()
-    if not repo: return False
-    
-    # 1. 找到仓库里的文件路径
+    # 1. 获取 Secrets
+    try:
+        # 兼容 [general] 和直接格式
+        secrets = st.secrets["general"] if "general" in st.secrets else st.secrets
+        token = secrets["GITHUB_TOKEN"]
+        repo_name = secrets["REPO_NAME"]
+        branch = secrets.get("BRANCH", "main")
+    except KeyError:
+        st.error("❌ Secrets 配置缺失！请检查 GITHUB_TOKEN 和 REPO_NAME")
+        return False
+
+    # 2. 连接 GitHub
+    try:
+        g = Github(token)
+        repo = g.get_repo(repo_name)
+    except Exception as e:
+        st.error(f"❌ GitHub 连接失败: {e}")
+        return False
+
+    # 3. 准备数据
     file_path = find_remote_file_path(repo, category)
-    
-    # 2. 准备内容
     content_str = "\n".join([str(x).strip() for x in new_list if str(x).strip()])
-    branch = st.secrets["general"].get("BRANCH", "main")
+    
+    # 4. 提交更新
+    msg_box = st.toast(f"⏳ 正在同步 GitHub: {file_path}...", icon="☁️")
     
     try:
-        # 3. 尝试获取现有文件 (为了拿到 sha 校验码，更新必须要有 sha)
-        contents = repo.get_contents(file_path, ref=branch)
-        
-        # 4. 更新文件 (Commit)
-        repo.update_file(
-            path=contents.path,
-            message=f"Update {category} via Streamlit App",
-            content=content_str,
-            sha=contents.sha,
-            branch=branch
-        )
-        print(f"✅ [GitHub Commit] 更新成功: {file_path}")
-        st.toast(f"云端同步成功: {file_path}", icon="☁️")
-        return True
-        
-    except Exception as e:
-        # 如果文件不存在，创建新文件
+        # 尝试获取文件 (为了拿 sha 进行更新)
         try:
+            contents = repo.get_contents(file_path, ref=branch)
+            repo.update_file(
+                path=contents.path,
+                message=f"Update {category} via App",
+                content=content_str,
+                sha=contents.sha,
+                branch=branch
+            )
+            time.sleep(1)
+            st.toast(f"✅ 同步成功！GitHub 已更新", icon="🎉")
+            return True
+        except:
+            # 文件不存在，创建新文件
             repo.create_file(
                 path=file_path,
-                message=f"Create {category} via Streamlit App",
+                message=f"Create {category}",
                 content=content_str,
                 branch=branch
             )
-            print(f"✅ [GitHub Create] 新建成功: {file_path}")
-            st.toast(f"云端新建成功: {file_path}", icon="✨")
+            st.toast(f"✅ 新建成功！文件已创建", icon="✨")
             return True
-        except Exception as create_e:
-            print(f"❌ [GitHub Error] {create_e}")
-            st.error(f"同步失败: {create_e}")
-            return False
+            
+    except Exception as e:
+        st.error(f"💥 同步炸了: {e}")
+        return False
 # ===========================
 # 2. 页面初始化
 # ===========================
